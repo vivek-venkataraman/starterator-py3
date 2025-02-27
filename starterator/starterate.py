@@ -25,8 +25,8 @@ from Bio import SeqIO
 from Bio.Graphics import GenomeDiagram
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter, A4
-from Bio.Blast import NCBIXML
-from Bio.Blast.Applications import NcbiblastpCommandline as Blastp
+# from Bio.Blast import NCBIXML
+# from Bio.Blast.Applications import NcbiblastpCommandline as Blastp
 # from Bio.Blast.Applications import BlastallCommandline
 import MySQLdb
 import subprocess
@@ -35,8 +35,8 @@ import math
 import pickle
 # from gi.repository import Gtk, Gdk, GObject
 import getpass
-from . import report
-from . import phamgene
+import report
+import phamgene
 '''
 def gui():
     GObject.threads_init()
