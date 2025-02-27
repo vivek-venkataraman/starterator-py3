@@ -1,14 +1,14 @@
 import MySQLdb
-from database import DB, get_db
-from phamgene import new_PhamGene
+from .database import DB, get_db
+from .phamgene import new_PhamGene
 from Bio.Align.Applications import ClustalwCommandline
 from Bio import AlignIO
 from Bio import SeqIO
 from collections import Counter
-import utils
+from . import utils
 import subprocess
 import os
-from utils import StarteratorError
+from .utils import StarteratorError
 
 
 
@@ -109,7 +109,7 @@ class Pham(object):
     def make_fasta(self, file_name=None):
         if file_name == None:
             file_name = os.path.join(utils.INTERMEDIATE_DIR, "%sPham%s" % (self.file, self.pham_no))
-        genes = [gene.sequence for gene in self.genes.values()]
+        genes = [gene.sequence for gene in list(self.genes.values())]
         count = SeqIO.write(genes, "%s.fasta" % file_name, "fasta")
 
     def align(self):
@@ -120,7 +120,7 @@ class Pham(object):
         """
         # files?
         file_name = os.path.join(utils.INTERMEDIATE_DIR, "%sPham%s" % (self.file, self.pham_no))
-        genes = [gene.sequence for gene in self.genes.values()]
+        genes = [gene.sequence for gene in list(self.genes.values())]
         count = SeqIO.write(genes, "%s.fasta" % file_name, "fasta")
         if len(self.genes) == 1:
             alignment = [gene.sequence]
@@ -138,7 +138,7 @@ class Pham(object):
         """ Returns a list of all the candidate starts from the alignment
         """
         self.total_possible_starts = []
-        for gene in self.genes.values():
+        for gene in list(self.genes.values()):
             for site in gene.alignment_candidate_starts:
                 if site not in self.total_possible_starts:
                     self.total_possible_starts.append(site) 
@@ -152,7 +152,7 @@ class Pham(object):
         """
         groups = []
         i = 0
-        genes = self.genes.values()
+        genes = list(self.genes.values())
         grouped = [False for gene in genes]
         while i < len(self.genes):
             if not grouped[i]:
@@ -192,8 +192,8 @@ class Pham(object):
         """
         # TODO:
             # add functionality for ignoring DRAFT phages?
-        all_start_sites = [gene.alignment_start_site for gene in self.genes.values()]
-        all_start_sites_set = set([gene.alignment_start_site for gene in self.genes.values()])
+        all_start_sites = [gene.alignment_start_site for gene in list(self.genes.values())]
+        all_start_sites_set = set([gene.alignment_start_site for gene in list(self.genes.values())])
         start_stats = {}
         # creates two lists each containing a list of gene ids
         # for each candidate start of the pham:
@@ -209,7 +209,7 @@ class Pham(object):
             start_stats["possible"][i+1] = []
             # start_stats["most_called"][i+1] = []
             start_stats["called_starts"][i+1] = []
-            for gene in self.genes.values():
+            for gene in list(self.genes.values()):
                 if site in gene.alignment_candidate_starts:
                     start_stats["possible"][i+1].append(gene.gene_id)
                 if site == gene.alignment_start_site:
@@ -225,8 +225,8 @@ class Pham(object):
         start_stats["most_not_called"] = []
         start_stats["no_most_called"] = []
         genes_without_most_called = []
-        print genes_start_most_called
-        for gene in self.genes.values():
+        print(genes_start_most_called)
+        for gene in list(self.genes.values()):
             if gene.gene_id in start_stats["possible"][most_called_start_index]:
                 if gene.gene_id in genes_start_most_called:
                     if gene.orientation == 'F':   #only +1 for forward genes

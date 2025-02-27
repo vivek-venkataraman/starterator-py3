@@ -13,16 +13,16 @@
 
 import MySQLdb
 from gi.repository import Gtk
-import ConfigParser
+import configparser
 import os
 import subprocess
 import sys
-import utils
-from uiStarterate import StarteratorEnterInformation
-from uiDialogs import DatabaseInfoDialog, PreferencesDialog
+from . import utils
+from .uiStarterate import StarteratorEnterInformation
+from .uiDialogs import DatabaseInfoDialog, PreferencesDialog
 import time
-import phamgene
-import phams
+from . import phamgene
+from . import phams
 
 """
 GUI Application for Starterator
@@ -90,14 +90,14 @@ class StarteratorWindow:
         Gtk.main_quit()
 
     def on_view_clicked(self, button):
-        print os.path.abspath(fself.config_info["final_file_dir"])
+        print(os.path.abspath(fself.config_info["final_file_dir"]))
         os.system("xdg-open \""+ os.path.abspath(self.config_info["final_file_dir"])+"\"")
 
     def on_contents_clicked(self, button):
         root_dir = utils.help_files 
-        print root_dir
+        print(root_dir)
         uri = 'ghelp:%s/index.page' % root_dir
-        print uri
+        print(uri)
         time_now = int(time.time())
 
         Gtk.show_uri(None, uri, time_now)
@@ -136,15 +136,15 @@ class StarteratorWindow:
     def check_blast_type(self):
         blast_dir = self.config_info['blast_dir']
         blast_cmd = self.config_info['blast_dir'] + 'makeblastdb'
-        print os.path.join(blast_dir,'blastp')
+        print(os.path.join(blast_dir,'blastp'))
         try:
-            print blast_cmd
+            print(blast_cmd)
             subprocess.check_call([blast_cmd, '-help'])
-            print blast_cmd, "worked"
+            print(blast_cmd, "worked")
             self.config_info['legacy_blast'] = False
         except:
             try:
-                print os.path.join(blast_dir,'formatdb')
+                print(os.path.join(blast_dir,'formatdb'))
                 self.config_info['legacy_blast'] = True
             except:
                 dialog = Gtk.MessageDialog(self, 0, Gtk.MessageType.ERROR,
@@ -157,10 +157,10 @@ class StarteratorWindow:
                 
     
     def get_configuration(self):
-        config = ConfigParser.RawConfigParser()
-        print utils.STARTERATOR_PATH + "/extras/starterator.config"
+        config = configparser.RawConfigParser()
+        print(utils.STARTERATOR_PATH + "/extras/starterator.config")
         config.read(utils.STARTERATOR_PATH + "/extras/starterator.config")
-        print config
+        print(config)
         self.config_info = dict(config.items('Starterator'))
         # self.config_info['intermediate_file_dir'] = os.path.abspath(self.config_info['intermediate_file_dir'])+ '/'
         # self.config_info['final_file_dir'] = os.path.abspath(self.config_info['final_file_dir']) + '/'
@@ -174,12 +174,12 @@ class StarteratorWindow:
              Gtk.STOCK_OPEN, Gtk.ResponseType.OK))
         response = dialog.run()
         if response == Gtk.ResponseType.OK:
-            print "Open clicked"
-            print "File selected: " + dialog.get_filename()
+            print("Open clicked")
+            print("File selected: " + dialog.get_filename())
             self.config_info[name] = dialog.get_filename()
-            print name, self.config_info[name]
+            print(name, self.config_info[name])
         elif response == Gtk.ResponseType.CANCEL:
-            print "Cancel clicked"
+            print("Cancel clicked")
         dialog.destroy()
 
     def db_connect(self):
@@ -191,7 +191,7 @@ class StarteratorWindow:
     
     def attempt_db_connect(self):
         try:
-            print 'attempting to connect', self.config_info
+            print('attempting to connect', self.config_info)
             db = MySQLdb.connect(self.config_info['database_server'], 
                     self.config_info['database_user'],
                     self.config_info['database_password'],

@@ -9,9 +9,9 @@
 # April 4, 2014
 # Class and functions for pham genes
 
-from phage import new_phage
+from .phage import new_phage
 import copy
-from database import DB
+from .database import DB
 from Bio.Blast import NCBIXML
 from Bio.Blast.Applications import NcbiblastpCommandline as Blastp
 from Bio.Blast.Applications import BlastallCommandline
@@ -21,9 +21,9 @@ from Bio.Seq import Seq
 from Bio import SeqIO
 from Bio.SeqFeature import SeqFeature, FeatureLocation
 import re
-from database import get_db
-import utils
-from utils import StarteratorError
+from .database import get_db
+from . import utils
+from .utils import StarteratorError
 import subprocess
 import math
 import os
@@ -43,7 +43,7 @@ def update_protein_db():
         fasta_file = os.path.join(utils.PROTEIN_DB, "Proteins.fasta")
         count = SeqIO.write(proteins, fasta_file, 'fasta')
     except:
-        print "creating proteins folder in correct place"
+        print("creating proteins folder in correct place")
         utils.create_folders()
         fasta_file = os.path.join(utils.PROTEIN_DB, "Proteins.fasta")
         count = SeqIO.write(proteins, fasta_file, 'fasta')
@@ -52,7 +52,7 @@ def update_protein_db():
                     '-in',"\""+ fasta_file+ "\"",
                     "-dbtype","prot", "-title", "Proteins",
                      "-out", "%s"% fasta_file]
-        print blast_db_command
+        print(blast_db_command)
     # else:
     #     blast_db_command = [BLAST_DIR + 'formatdb',
     #                 '-i', "\""+ fasta_file+ "\"",
@@ -64,7 +64,7 @@ def update_protein_db():
 def check_protein_db(count):
     results = get_db().query('SELECT count(*) from gene')
     new_count = results[0][0]
-    print new_count
+    print(new_count)
     if int(new_count) != int(count):
         update_protein_db()
         config = utils.get_config()
@@ -75,21 +75,21 @@ def get_pham_no(phage_name, gene_number):
     """
         Gets the pham number of a gene, given the phage name and the gene number
     """
-    print phage_name, gene_number
+    print(phage_name, gene_number)
     db = DB()
     query = "SELECT pham.name \n\
             FROM gene JOIN pham ON gene.GeneID = pham.GeneID \n\
             JOIN phage ON gene.PhageID = phage.PhageID \n\
             WHERE (phage.Name LIKE %s or phage.PhageID = %s) AND gene.Name RLIKE %s \n\
             "% (phage_name+ "%", phage_name, '^[:alpha:]*(_)*%s$' % str(gene_number))
-    print query
+    print(query)
     try:
         results = db.query("SELECT pham.name \n\
             FROM gene JOIN pham ON gene.GeneID = pham.GeneID \n\
             JOIN phage ON gene.PhageID = phage.PhageID \n\
             WHERE (phage.Name LIKE %s or phage.PhageID = %s) AND gene.Name RLIKE %s", 
             (phage_name+"%", phage_name, '^([[:alnum:]]*_)*([[:alpha:]])*%s$' % str(gene_number)))
-        print results
+        print(results)
         row = results[0]
         pham_no = row[0]
         return str(pham_no)
@@ -130,7 +130,7 @@ def find_upstream_stop_site(start, stop, orientation, phage_sequence):
         sequence_ahead_of_start = sequence[:ahead_of_start]
         sequence_ahead_of_start = sequence_ahead_of_start[::-1]
         
-        for index in xrange(0, len(sequence_ahead_of_start), 3):
+        for index in range(0, len(sequence_ahead_of_start), 3):
             codon = str(sequence_ahead_of_start[index:index+3])
             if codon in stop_codons:
                 new_ahead_of_start = index
@@ -228,7 +228,7 @@ class PhamGene(Gene):
         gene_sequence = self.sequence.seq
         starts = []
         start_codons = ['ATG', 'GTG', 'TTG']
-        for index in xrange(0, len(gene_sequence), 3):
+        for index in range(0, len(gene_sequence), 3):
             codon = str(gene_sequence[index:index+3])
             if codon in start_codons:
                 starts.append(index)
@@ -272,7 +272,7 @@ class PhamGene(Gene):
                 finds the coordinates of the index on the phage sequence.
         """
         new_start_index = 0
-        for i in xrange(0, index):
+        for i in range(0, index):
             if self.alignment.seq[i] != '-':
                 new_start_index += 1
         if self.orientation == 'R':
@@ -378,7 +378,7 @@ class UnPhamGene(PhamGene):
             result_handle.close()
         except:
             protein = SeqRecord(self.sequence.seq.translate(), id=self.gene_id)
-            print protein, self.sequence
+            print(protein, self.sequence)
             e_value = math.pow(10, -30)
             SeqIO.write(protein, '%s/%s.fasta' % (utils.INTERMEDIATE_DIR, self.gene_id), 'fasta')
             blast_command = Blastp(
@@ -393,7 +393,7 @@ class UnPhamGene(PhamGene):
                 "-db", "\"%s/Proteins.fasta\"" % (utils.PROTEIN_DB),
                 "-evalue", str(e_value)
                 ]
-            print " ".join(blast_args)
+            print(" ".join(blast_args))
             try:
                 subprocess.check_call(blast_args)
             except:
@@ -411,14 +411,14 @@ class UnPhamGene(PhamGene):
             result_handle.close()
             result_handle = open('%s/%s.xml' % (self.output_dir, self.name))
             blast_records = NCBIXML.parse(result_handle)
-            blast_record = blast_records.next()
+            blast_record = next(blast_records)
 
         if len(blast_record.descriptions) > 0:
             first_result = blast_record.descriptions[0].title.split(',')[0].split(' ')[-1]
-            print first_result
+            print(first_result)
             phage_name = first_result.split("_")[0]
             gene_number = first_result.split("_")[-1]
-            print phage_name, gene_number
+            print(phage_name, gene_number)
             pham_no = get_pham_no(phage_name, gene_number)
             self.pham_no = pham_no
             return pham_no

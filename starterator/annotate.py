@@ -10,7 +10,7 @@
 # Annotation of Phage genomes using Glimmer and Genemark
 
 import requests
-from HTMLParser import HTMLParser
+from html.parser import HTMLParser
 from bs4 import BeautifulSoup
 from operator import attrgetter
 
@@ -49,9 +49,9 @@ class GenePredictions(object):
 		while(self_index < len(self.genes) or other_index < len(other.genes)):
 			predict_gene = self.genes[self_index]
 			other_gene = other.genes[other_index]
-			print new_index
-			print "glimmer ", predict_gene
-			print "genemark", other_gene
+			print(new_index)
+			print("glimmer ", predict_gene)
+			print("genemark", other_gene)
 			# if predict_gene.orientation != other_gene.orientation:
 			# 	new_predictions.genes.append(predict_gene)
 			# 	new_predictions.genes.append(other_gene)
@@ -139,7 +139,7 @@ def glimmer_annotate(text):
 	index = 1
 	lines = text.splitlines()
 	for line in lines:
-		print line, index
+		print(line, index)
 		if "orf" in line and "orfID" not in line:
 			properties = line.split()
 			start = properties[1]
@@ -149,7 +149,7 @@ def glimmer_annotate(text):
 				gene =  PredictedGene(index, int(start), int(stop), 'R')
 			else:
 				gene = PredictedGene(index, int(start), int(stop), 'F')
-			print gene
+			print(gene)
 			glimmer_list.append(gene)
 			index += 1
 
@@ -179,9 +179,9 @@ def auto_annotate(fasta_file):
 	genemark = parse_ncbi_response(genemark_response)
 
 	glimmer_predict = glimmer_annotate(glimmer)
-	print glimmer_predict
+	print(glimmer_predict)
 	genemark_predict = genemark_annotate(genemark)
-	print genemark_predict
+	print(genemark_predict)
 	# print glimmer
 	combined = glimmer_predict.combine(genemark_predict)
 	combined.order_prediction()

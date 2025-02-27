@@ -11,13 +11,13 @@
 
 import MySQLdb
 from gi.repository import Gtk, GObject, Gdk
-import ConfigParser
+import configparser
 import os
 import subprocess
 import sys
 import threading
 import time
-import utils
+from . import utils
 
 class StarteratorExceptionDialog(Gtk.Dialog):
     def __init__(self, parent):
@@ -169,7 +169,7 @@ class StarteratorThread(threading.Thread):
         self.stop_thread.set()
 
     def update(self, text, amount):
-        print 'update', text, amount
+        print('update', text, amount)
         Gdk.threads_enter()
         self.parent.update_starterator(text, amount)
         Gdk.threads_leave()
@@ -281,10 +281,10 @@ class PreferencesDialog(Gtk.Dialog):
              Gtk.STOCK_OPEN, Gtk.ResponseType.OK))
         response = dialog.run()
         if response == Gtk.ResponseType.OK:
-            print "File selected: " + dialog.get_filename()
+            print("File selected: " + dialog.get_filename())
             self.config_info[name] = dialog.get_filename()
             entry.set_text(self.config_info[name])
-            print name, self.config_info[name]
+            print(name, self.config_info[name])
             utils.write_to_config_file(self.config_info)
 
         dialog.destroy()

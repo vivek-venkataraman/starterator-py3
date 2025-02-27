@@ -10,19 +10,19 @@
 # Making of the Starterator Reports
 
 import subprocess
-import cPickle
+import pickle
 import PyPDF2
-import phams
-import phamgene
-import phage
-import utils
+from . import phams
+from . import phamgene
+from . import phage
+from . import utils
 from time import sleep
 from Bio import SeqIO
 import math
 import os
-from utils import StarteratorError
+from .utils import StarteratorError
 import csv
-import annotate
+from . import annotate
 
 class Report(object):
     def __init__(self, name=None):
@@ -35,7 +35,7 @@ class Report(object):
             specifics = ["-a", 'All'] + specifics
         args = ['python', utils.MAKING_FILES, "-d", utils.INTERMEDIATE_DIR] + specifics
         sargs = " ".join(args)
-        print sargs
+        print(sargs)
         subprocess.check_call(args)
 
 
@@ -66,8 +66,8 @@ class PhageReport(Report):
     def make_reports(self):
         self.phage_genes = {}
         pham_counter = 0
-        total_no = len(self._phams.keys())
-        for pham_no in self._phams.keys():
+        total_no = len(list(self._phams.keys()))
+        for pham_no in list(self._phams.keys()):
             if pham_no is not None:
                 pham_counter += 1
                 self.update_gui("Aligning and Graphing Pham %s \n Pham %d of %d"
@@ -75,10 +75,10 @@ class PhageReport(Report):
                 gene_report = GeneReport(self.base_name, self.phage_)
                 pham_no = gene_report.get_pham(pham_no)
                 pham = gene_report.make_report(whole=True)
-                print pham_no
+                print(pham_no)
                 genes = self._phams[pham_no]
                 for gene in genes:
-                    print gene.gene_id
+                    print(gene.gene_id)
                     phage_gene = pham.genes[gene.gene_id]
                     gene_no = phamgene.get_gene_number(gene.gene_id)
                     self.phage_genes[gene_no] = {'suggested_start': phage_gene.suggested_start["most_called"],
@@ -88,7 +88,7 @@ class PhageReport(Report):
     
     def make_phage_pages(self):
         pickle_file = os.path.join(self.output_dir, "%s.pickle" % (self.name))
-        cPickle.dump(self.phage_genes, open(pickle_file, "wb"))
+        pickle.dump(self.phage_genes, open(pickle_file, "wb"))
         args = ["-p", self.name, "-f", pickle_file, "-l", str(self.seq_length), "-m", "genome"]
         self.make_file(args, True)
 
@@ -103,7 +103,7 @@ class PhageReport(Report):
         merger.append(fileobj=phage_genome)
         merger.append(fileobj=phage_starts)
         phams_added = []
-        for gene_no in sorted(self.phage_genes.iterkeys()):
+        for gene_no in sorted(self.phage_genes.keys()):
             phage_gene = self.phage_genes[gene_no]
             pham = phage_gene["pham_no"]
             if pham not in phams_added and pham != None:
@@ -145,7 +145,7 @@ class UnPhamPhageReport(PhageReport):
         if not self.sequence:
             try:
                 with open(self.fasta, "rb") as fasta_file:
-                    fasta_file.next()
+                    next(fasta_file)
                     sequence = ""
                     for line in fasta_file:
                         sequence += (line.strip())
@@ -173,21 +173,21 @@ class UnPhamPhageReport(PhageReport):
             else:
                 try:
                     with open(self.profile, "rbU") as profile:
-                        print self.profile, "has been opened!"
+                        print(self.profile, "has been opened!")
                         csv_reader = csv.reader(profile)
-                        line = csv_reader.next()
-                        print line
-                        csv_reader.next()
+                        line = next(csv_reader)
+                        print(line)
+                        next(csv_reader)
                         for row in csv_reader:
-                            print line
+                            print(line)
                             feature_type = row[7].strip()
-                            print feature_type
+                            print(feature_type)
                             if feature_type == "ORF":
                                 number = row[1].replace('"', "")
                                 orientation = row[2]
                                 start = int(row[4])
                                 stop = int(row[5])
-                                print number, start, stop, orientation, self.name
+                                print(number, start, stop, orientation, self.name)
                                 gene = phamgene.UnPhamGene(number, start, stop, orientation, self.name, 
                                     sequence)
                                 genes.append(gene)
@@ -241,14 +241,14 @@ class GeneReport(Report):
         elif pham_no:
             self.pham = phams.Pham(pham_no)
         else:
-            print self.phage_name, self.number
+            print(self.phage_name, self.number)
             pham_no = phamgene.get_pham_no(self.phage_name, self.number)
             self.pham = phams.Pham(pham_no)
         return pham_no
     
     def get_sequence(self):
         with open(self.fasta) as fasta_file:
-            fasta_file.next()
+            next(fasta_file)
             sequence = ""
             for line in fasta_file:
                 sequence += (line.strip())
@@ -267,10 +267,10 @@ class GeneReport(Report):
         self.pham.align()
         self.pham.find_most_common_start()
         pickle_file = os.path.join(self.output_dir, "%s%s.pickle" % (self.pham.file, self.pham.pham_no))#TODO: Figure out base name things
-        print pickle_file, self.output_dir
+        print(pickle_file, self.output_dir)
         f = open(pickle_file, "wb")
-        cPickle.dump(self.pham, f)
-        print pickle_file
+        pickle.dump(self.pham, f)
+        print(pickle_file)
         sleep(2)
         f.close()
 
@@ -309,7 +309,7 @@ class UnPhamGeneReport(GeneReport):
         if not self.sequence:
             try:
                 with open(self.fasta_file) as fasta_file:
-                    fasta_file.next()
+                    next(fasta_file)
                     sequence = ""
                     for line in fasta_file:
                         sequence.join(line.strip())
@@ -351,7 +351,7 @@ class PhamReport(Report):
         self.pham.find_most_common_start()
         pickle_file = os.path.join(self.output_dir, "%s.pickle" % (self.pham.pham_no)) #TODO: Figure out base name things
         f = open(pickle_file, "wb")
-        cPickle.dump(self.pham, f)
+        pickle.dump(self.pham, f)
         f.close()
         args = ["-n", self.pham_no, "-f", pickle_file, '-m', "text"]
         self.make_file(args)

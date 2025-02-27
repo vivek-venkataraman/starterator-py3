@@ -1,5 +1,5 @@
-from utils import *
-from phams import *
+from .utils import *
+from .phams import *
 from reportlab.lib.pagesizes import letter, A4
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 from reportlab.lib.enums import TA_CENTER
@@ -33,7 +33,7 @@ class GeneReport(object):
         SeqIO.write(self.protein, '%s%s.fasta' % (self.output_dir, self.name), 'fasta')
         # Run blast program with the following parameters
         e_value = math.pow(10, -30)
-        print self.legacy_blast 
+        print(self.legacy_blast) 
         if not self.legacy_blast:
             blast_command = Blastp(
                             query='%s%s.fasta' % (self.output_dir, self.name),
@@ -76,7 +76,7 @@ class GeneReport(object):
             result_handle.close()
             result_handle = open('%s%s.xml' % (self.output_dir, self.name))
             blast_records = NCBIXML.parse(result_handle)
-            blast_record = blast_records.next()
+            blast_record = next(blast_records)
         # If there is at least one blast result, return the first result, otherwise returns None
         # E-value of 10 exp -30 or better are grouped into the same family
         if len(blast_record.descriptions) > 0:
@@ -85,16 +85,16 @@ class GeneReport(object):
             first_result_name = temp[0].split(' ')[1]
             phage_name = first_result_name.split('_')[0]
             gene_number = first_result_name.split('_')[-1]
-            print phage_name, gene_number
+            print(phage_name, gene_number)
             self.pham_no =get_pham_no(self.db, phage_name, gene_number)
         else:
             self.pham_no = None
         return self.pham_no
 
     def make_unphamerated_gene(self, start, stop, orientation):
-        print 'fasta', self.fasta
+        print('fasta', self.fasta)
         seq_file = open(self.fasta, 'r')
-        first_line = seq_file.next() 
+        first_line = next(seq_file) 
         sequence = ""
         for line in seq_file:
             sequence += line.strip()

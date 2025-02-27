@@ -1,5 +1,5 @@
-from database import DB, get_db
-import phamgene
+from .database import DB, get_db
+from . import phamgene
 # don't want mutliples of phage object
 # before making a phage, 
 phage_list = {}

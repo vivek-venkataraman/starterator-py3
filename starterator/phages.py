@@ -1,15 +1,15 @@
-import genes
-import utils
-from genes import *
-from phams import *
-from utils import *
+from . import genes
+from . import utils
+from .genes import *
+from .phams import *
+from .utils import *
 from reportlab.lib.pagesizes import letter, A4
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 from reportlab.lib.enums import TA_CENTER
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 import PyPDF2
 from reportlab.lib import colors
-from phage import new_phage
+from .phage import new_phage
 
 class PhageReport(object):
     def __init__(self, name, is_phamerated, fasta_file=None, profile_file=None, gui=None, event=None):
@@ -30,14 +30,14 @@ class PhageReport(object):
 
     def make_report(self):
         if self.is_phamerated:
-            print 'before phams found'
+            print('before phams found')
             phams = self.phage.get_phams()
             seq_length = self.phage.length()
-            print 'after phams found'
+            print('after phams found')
             for gene_name, pham_no in phams:
                 if self.gui:
                     if self.event.is_set():
-                        print 'stopped in make_report'
+                        print('stopped in make_report')
                         sys.exit(0)
                 gene_number = utils.get_gene_number(gene_name)
                 # gene_id = self.name +'_' + str(gene_number)
@@ -48,7 +48,7 @@ class PhageReport(object):
         else:
             
             if self.gui:
-                print 'in unphamerated pham'
+                print('in unphamerated pham')
                 if self.event.is_set():
                     sys.exit(0)
                 self.gui.update('Finished Making Unphamerated Genes.', .02)
@@ -143,7 +143,7 @@ class PhageReport(object):
                     sys.exit(0)
                 self.gui.update('Making Unphamerated Genes', .01)
             seq_file = open(self.fasta, 'r')
-            first_line = seq_file.next() 
+            first_line = next(seq_file) 
             seq_info = first_line.split(',')[1]
             seq_length = int(seq_info.strip().split(' ')[0])
             sequence = ""
@@ -152,8 +152,8 @@ class PhageReport(object):
             seq_file.close()
 
             genes_file = open(self.profile, 'rb')
-            genes_file.next()
-            genes_file.next()
+            next(genes_file)
+            next(genes_file)
             for line in genes_file:
                 temp = line.split(',')
                 feature_type = temp[7].strip()
@@ -190,11 +190,11 @@ class PhageReport(object):
         gd_diagram = GenomeDiagram.Diagram(self.name)
         gd_track = gd_diagram.new_track(1, name=self.name, greytrack=1)
         gd_pham_set = gd_track.new_set()
-        print "making genome page"
+        print("making genome page")
         for gene_num in pham_genes:
             pham = pham_genes[gene_num][1]
             gene = pham_genes[gene_num][0]
-            print pham, gene.id
+            print(pham, gene.id)
             if pham == None:
                 pham_no = "None"
                 pham_color = 'Black'
@@ -227,14 +227,14 @@ class PhageReport(object):
         """
         doc = SimpleDocTemplate("%sSuggestedStarts.pdf" % (self.intermediate_dir + self.name), pagesize=letter)
         story = []
-        print "making suggested starts page"
+        print("making suggested starts page")
         styles = getSampleStyleSheet()
         styles.add(ParagraphStyle(name="paragraph"))
         styles.add(ParagraphStyle(name='Center', alignment=TA_CENTER))
         text = '<font size=14> Suggested Start Coordinates</font>'
         story.append(Paragraph(text, styles['Center']))
         story.append(Spacer(1, 12))
-        for gene_no in sorted(pham_genes.iterkeys()):
+        for gene_no in sorted(pham_genes.keys()):
             gene = pham_genes[gene_no][0]
             pham = pham_genes[gene_no][1]
             if pham == None:
@@ -252,7 +252,7 @@ class PhageReport(object):
             {Phage}Report.pdf
         """
         one_or_all = 'All'
-        print "making report"
+        print("making report")
         merger = PyPDF2.PdfFileMerger()
         phage_starts = open("%sSuggestedStarts.pdf" % (self.intermediate_dir + self.name), 'rb')
         phage_genome = open('%sPhamsGraph.pdf' % (self.intermediate_dir + self.name), 'rb')

@@ -55,7 +55,7 @@ def get_pham_no(db, phage_name, gene_number):
     cursor = db.cursor()
     #Query the database for genes that match the given gene number and phage name
     like_phage_name = phage_name +'%'
-    print(like_phage_name, gene_number)
+    print((like_phage_name, gene_number))
     cursor.execute("SELECT `gene`.`GeneID` , `pham`.`name` , `phage`.`PhageID`\n\
     FROM `gene`\n\
     JOIN `pham` ON `gene`.`GeneID` = `pham`.`GeneID`\n\
@@ -64,7 +64,7 @@ def get_pham_no(db, phage_name, gene_number):
     AND `gene`.`GeneID` LIKE %s \n\
     ESCAPE '!'", (like_phage_name, '%!_'+ str(gene_number)))
     results = cursor.fetchall()
-    print(results, phage_name, gene_number)
+    print((results, phage_name, gene_number))
     # There should only be one result.
     row = results[0]
     pham_no = row[1]
@@ -92,7 +92,7 @@ def find_phams_of_a_phage(db, phage):
     phage_phams = []
     seq_length = results[0][3]
     for row in results:
-        print(row[0], row[1])
+        print((row[0], row[1]))
         phage_phams.append([row[0],str(row[1])])
     return phage_phams, seq_length
 
@@ -212,7 +212,7 @@ def get_config():
     config_file = os.path.abspath(os.path.join(os.environ["HOME"], ".starterator/starterator.config"))
     config = configparser.RawConfigParser()
     config.read(config_file)
-    print("?", CONFIGURATION_FILE, config)
+    print(("?", CONFIGURATION_FILE, config))
     config_info = dict(config.items('Starterator'))
     INTERMEDIATE_DIR = config_info["intermediate_file_dir"]
     FINAL_DIR = config_info["final_file_dir"]
@@ -234,17 +234,17 @@ def db_connect(config_info):
     
 def attempt_db_connect(config_info):
     try:
-        print('attempting to connect', config_info)
+        print(('attempting to connect', config_info))
         db = MySQLdb.connect(config_info['database_server'], 
                 config_info['database_user'],
                 config_info['database_password'],
                 config_info['database_name'])
         db.close()
     except:
-        config_info['database_server'] = input("Enter Database server: ")
-        config_info['database_user'] = input("Enter Database username: ")
+        config_info['database_server'] = eval(input("Enter Database server: "))
+        config_info['database_user'] = eval(input("Enter Database username: "))
         config_info['database_password'] = getpass.getpass('Enter Database password: ')
-        config_info['database_name'] = input("Enter database name: ")
+        config_info['database_name'] = eval(input("Enter database name: "))
         print(config_info)
         attempt_db_connect(config_info)
     return config_info

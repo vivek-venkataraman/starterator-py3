@@ -35,8 +35,8 @@ import math
 import pickle
 # from gi.repository import Gtk, Gdk, GObject
 import getpass
-import report
-import phamgene
+from . import report
+from . import phamgene
 '''
 def gui():
     GObject.threads_init()

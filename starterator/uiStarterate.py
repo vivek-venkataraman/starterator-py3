@@ -13,11 +13,11 @@ import MySQLdb
 from gi.repository import Gtk, Gdk
 import threading
 import time
-from uiDialogs import StarteratorFinishedDialog
-import starterate
-from utils import StarteratorError
-import database
-import phamgene
+from .uiDialogs import StarteratorFinishedDialog
+from . import starterate
+from .utils import StarteratorError
+from . import database
+from . import phamgene
 
 class StarteratorEnterInformation(Gtk.Dialog):
     def show_starterate_button(self):
@@ -193,9 +193,9 @@ class StarteratorEnterInformation(Gtk.Dialog):
         db = self.db_connect()
         phamgene.check_protein_db(self.config_info['count'])
         phage_name = self.find_phage_in_db(db, str(self.info['phage']))
-        print 'new phage name', self.info['phage']
-        print 'phamerated', self.info['phamerated']
-        print 'all', self.info['all']
+        print('new phage name', self.info['phage'])
+        print('phamerated', self.info['phamerated'])
+        print('all', self.info['all'])
         if phage_name == None and self.info["phamerated"] and not self.info["pham"]:
             self.phameratored_exception(self.info["phage"])
             return
@@ -230,10 +230,10 @@ class StarteratorEnterInformation(Gtk.Dialog):
              Gtk.STOCK_OPEN, Gtk.ResponseType.OK))
         response = dialog.run()
         if response == Gtk.ResponseType.OK:
-            print "File selected: " + dialog.get_filename()
+            print("File selected: " + dialog.get_filename())
             self.info[name] = dialog.get_filename()
             entry.set_text(self.info[name])
-            print name, self.info[name]
+            print(name, self.info[name])
         dialog.destroy()
 
     def on_entry_changed(self, entry, name):
@@ -313,7 +313,7 @@ class StarteratorThread(threading.Thread):
         except:
             if self.stop_thread.is_set():
                 return
-            print 'exception in starterator'
+            print('exception in starterator')
             self.stop = True
             Gdk.threads_enter()
             dialog = Gtk.MessageDialog(self.parent, 0, Gtk.MessageType.ERROR,
@@ -331,7 +331,7 @@ class StarteratorThread(threading.Thread):
                 # clean up files?
                 # show dialog
                 return
-            print 'help after starterator finished'
+            print('help after starterator finished')
             Gdk.threads_enter()
             done_dialog = StarteratorFinishedDialog(self.parent, self.final_file)
             response = done_dialog.run()
@@ -345,7 +345,7 @@ class StarteratorThread(threading.Thread):
         self.stop_thread.set()
 
     def update(self, text, amount):
-        print 'update', text, amount
+        print('update', text, amount)
         Gdk.threads_enter()
         self.parent.update_starterator(text, amount)
         Gdk.threads_leave()
