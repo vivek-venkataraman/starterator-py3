@@ -11,7 +11,7 @@
 # Starterate function 
 
 import argparse
-from . import utils
+from starterator import utils
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter, A4
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
@@ -27,17 +27,17 @@ from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter, A4
 from Bio.Blast import NCBIXML
 from Bio.Blast.Applications import NcbiblastpCommandline as Blastp
-from Bio.Blast.Applications import BlastallCommandline
+# from Bio.Blast.Applications import BlastallCommandline
 import MySQLdb
 import subprocess
 import os, sys
 import math
 import pickle
-from gi.repository import Gtk, Gdk, GObject
+# from gi.repository import Gtk, Gdk, GObject
 import getpass
 from . import report
 from . import phamgene
-
+'''
 def gui():
     GObject.threads_init()
     Gdk.threads_init()
@@ -47,7 +47,7 @@ def gui():
     Gdk.threads_enter()
     Gtk.main()
     Gdk.threads_leave()
-
+'''
 def get_output_one_pham(pham, pham_no, config):
     """
         Creates a PDF Report for the specific pham.
