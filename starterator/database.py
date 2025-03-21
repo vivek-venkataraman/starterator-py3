@@ -33,6 +33,7 @@ class DB(object):
         args["db"] = config["database_name"]
         args["host"] = config["database_server"]
         args["port"] =  3307
+        args["unix_socket"] = config["unix_socket"]
         self.host = "{0}:{1}".format(args['host'], args['port'])
 
         self._db_args = args
