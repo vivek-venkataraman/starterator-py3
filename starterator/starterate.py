@@ -179,6 +179,8 @@ def main():
                 print(f"~{pham_id}")
             for pham_id in results["phams_removed"]:
                 print(f"-{pham_id}")
+        else:
+            print("No differences found!")
         return
 
     if args.get_pham_hashes:
