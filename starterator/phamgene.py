@@ -239,6 +239,17 @@ class PhamGene(Gene):
         self.ahead_of_start = None
         self.sequence = self.make_gene()
         self.candidate_starts = self.add_candidate_starts()
+        # adjacent start checking
+        self.adjacent_candidate_start_groups = self._find_adjacent_start_groups(
+            self.candidate_starts
+        )
+        self.has_adjacent_candidate_starts = bool(self.adjacent_candidate_start_groups)
+
+        #debug during run
+        if self.has_adjacent_candidate_starts:
+            print(
+                f"[QC] gene {getattr(self, 'gene_number', '?')} adjacent starts: {self.adjacent_candidate_start_groups}")
+
         self.alignment = None
         self.alignment_start_site = None
         self.alignment_candidate_starts = None
@@ -301,6 +312,33 @@ class PhamGene(Gene):
             if codon in start_codons:
                 starts.append(index)
         return sorted(starts)
+
+    def _find_adjacent_start_groups(self, starts):
+        """Returns groups of start sites that are adjacent in the same ORF (exactly 3 apart)
+
+        groups neighboring start sites, ignoring ones that aren't adjacent
+
+        bad_starts should NOT be called. Starts where there is at least 1 start codon immediately following it.
+        """
+        if not starts:
+            return []
+        starts_sorted = sorted(starts)
+        bad_groups = []
+        current = [starts_sorted[0]]
+
+        for s in starts_sorted[1:]:
+            if s - current[-1] == 3:
+                current.append(s)
+            else:
+                if len(current) >= 2:
+                    bad_groups.append(current)
+                current = [s]
+
+        if len(current) >= 2:
+            bad_groups.append(current)
+        return bad_groups
+
+
 
     def add_alignment_start_site(self):
         """
@@ -527,6 +565,16 @@ class UnPhamGene(PhamGene):
 
         self.sequence = self.make_gene(phage_sequence)
         self.candidate_starts = self.add_candidate_starts()
+        #adjacent start checking
+        self.adjacent_candidate_start_groups = self._find_adjacent_start_groups(
+            self.candidate_starts
+        )
+        self.has_adjacent_candidate_starts = bool(self.adjacent_candidate_start_groups)
+        # debug during run
+        if self.has_adjacent_candidate_starts:
+            print(
+                f"[QC] gene {getattr(self, 'gene_number', '?')} adjacent starts: {self.adjacent_candidate_start_groups}")
+
         self.alignment = None
         self.alignment_start = None
         self.alignment_candidate_starts = None
