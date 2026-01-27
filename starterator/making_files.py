@@ -872,6 +872,9 @@ def make_suggested_starts(phage_genes, phage_name, file_path):
     # items to build table
     summary_data = list()
 
+    flagged_startnum_rows = []
+
+
     headers = ["Gene", "Pham\nNum", "Pham\nsize", "Start\nNum","Start\nCoord", "Inform\nAnnots", "Agree vs.\ntop Alt"]
     summary_data.append(headers)
 
@@ -934,6 +937,11 @@ def make_suggested_starts(phage_genes, phage_name, file_path):
 
         summary_data.append(gene_summary)
 
+        # Flag this row if the called start is one of the gene's bad adjacent starts
+        if getattr(gene, "called_start_is_bad", False):
+            flagged_startnum_rows.append(len(summary_data) - 1)
+
+
     story.append(Spacer(1, 12))
 
     text = 'The following table summarizes annotation results with a focus on only those manual ' \
@@ -971,6 +979,13 @@ def make_suggested_starts(phage_genes, phage_name, file_path):
             color_styles.append(('BACKGROUND', (score_column, row), (score_column, row), colors.green))
         else:
             color_styles.append(('BACKGROUND', (score_column, row), (score_column, row), colors.yellow))
+
+    # Coloring in the "Start Num" column if any of the adjacent start flagged genes are present in the phage.
+    start_num_column = 3  # columns: 0 Gene, 1 Pham Num, 2 Pham size, 3 Start Num, 4 Start Coord, 5 Inform Annots, 6 Agree vs top Alt
+    for row in flagged_startnum_rows:
+        color_styles.append(('BACKGROUND', (start_num_column, row), (start_num_column, row), colors.red))
+        color_styles.append(('TEXTCOLOR', (start_num_column, row), (start_num_column, row), colors.white))
+
 
     table.setStyle(TableStyle(full_grid_style))
     table.setStyle(TableStyle(align_styles))
