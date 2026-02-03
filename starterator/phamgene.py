@@ -180,6 +180,8 @@ class Gene(object):
 
 pham_genes = {}
 
+PRINTED_BAD_STARTS = set()
+
 
 def new_PhamGene(db_id, start, stop, orientation, phage_id, name, phage_sequence=None):
     if db_id is None:
@@ -241,7 +243,7 @@ class PhamGene(Gene):
         self.candidate_starts = self.add_candidate_starts()
 
         # --- QC: adjacent-start clusters and "bad starts" (all-but-last in each cluster) ---
-        adjacent_candidate_start_groups = self._find_adjacent_start_groups(self.candidate_starts)
+        self.adjacent_candidate_start_groups = self._find_adjacent_start_groups(self.candidate_starts)
 
         # Flatten clusters into a single "bad starts" list:
         # for each adjacent run [a,b,c], treat [a,b] as bad (drop last), then merge across runs.
@@ -319,7 +321,7 @@ class PhamGene(Gene):
                 starts.append(index)
         return sorted(starts)
 
-    def _find_adjacent_start_groups(self):
+    def _find_adjacent_start_groups(self, candidate_starts):
         """Returns groups of start sites that are adjacent in the same ORF (exactly 3 apart)
 
         groups neighboring start sites, ignoring ones that aren't adjacent
@@ -327,7 +329,7 @@ class PhamGene(Gene):
         bad_starts should NOT be called. Starts where there is at least 1 start codon immediately following it.
         """
 
-        starts_sorted = sorted(self.starts)
+        starts_sorted = sorted(candidate_starts)
         bad_groups = []
         current = [starts_sorted[0]]
 
@@ -572,7 +574,7 @@ class UnPhamGene(PhamGene):
         self.candidate_starts = self.add_candidate_starts()
 
         # --- QC: adjacent-start clusters and "bad starts" (all-but-last in each cluster) ---
-        adjacent_candidate_start_groups = self._find_adjacent_start_groups()
+        self.adjacent_candidate_start_groups = self._find_adjacent_start_groups(self.candidate_starts)
 
         bad = []
         for grp in self.adjacent_candidate_start_groups:
@@ -580,6 +582,13 @@ class UnPhamGene(PhamGene):
                 bad.extend(grp[:-1])
         self.bad_adjacent_candidate_starts = sorted(set(bad))
         self.has_bad_adjacent_candidate_starts = bool(self.bad_adjacent_candidate_starts)
+
+
+
+
+
+
+
         if self.has_bad_adjacent_candidate_starts:
             print(
                 f"[QC] bad adjacent starts (offsets) gene={getattr(self, 'gene_no', getattr(self, 'number', '?'))}: {self.bad_adjacent_candidate_starts}")
