@@ -540,6 +540,7 @@ class PhamGene(Gene):
         self.locustag = db_return[2]
         return
 
+#test
     def __repr__(self):
         return 'Phamgene for %s' % self.gene_id
 
