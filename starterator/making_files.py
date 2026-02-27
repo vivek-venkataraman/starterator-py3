@@ -34,6 +34,21 @@ import os
 # from reportlab.lib import colors
 
 
+import json
+
+def load_gap_map(output_dir, phage_name):
+    path = os.path.join(output_dir, f"{phage_name}_phamerator_gaps.json")
+    if not os.path.exists(path):
+        return {}
+
+    try:
+        with open(path, "r") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+
 def parse_arguments():
     parser = argparse.ArgumentParser()
     parser.add_argument('-n', '--pham_no', default=-1)
@@ -669,6 +684,13 @@ def make_pham_text(args, pham, pham_no, output_dir, only_pham=False):
     styles.add(ParagraphStyle(name="paragraph"))
     styles.add(ParagraphStyle(name='Center', alignment=TA_CENTER))
 
+
+    # gap scoresa
+    gap_map = {}
+    if args.phage:
+        gap_map = load_gap_map(output_dir, args.phage)
+        print("[making_files] gap map entries:", len(gap_map), flush=True)
+
     # increase leading a bit
     styles["Normal"].leading = 14
 
@@ -773,9 +795,18 @@ def make_pham_text(args, pham, pham_no, output_dir, only_pham=False):
                 else:
                     candidate_starts += '(' + str(start_num) + ', ' + str(gene.alignment_index_to_coord(start)) + '), '
 
-            story.append(Paragraph(" Gene: %s \n Start: %s, Stop: %s, Start Num: %s " % (gene.full_name,
-                                   gene.start_codon_location, gene.stop_codon_location,
-                                   gene.suggested_start["current_start_number"]), text_style))
+            gap = gap_map.get(gene.full_name)
+            gap_text = "N/A" if gap is None else str(gap)
+
+            story.append(Paragraph(
+                " Gene: %s <br/> Start: %s, Stop: %s, Start Num: %s, Gap Score: %s " %
+                (gene.full_name,
+                 gene.start_codon_location,
+                 gene.stop_codon_location,
+                 gene.suggested_start["current_start_number"],
+                 gap_text),
+                text_style
+            ))
 
             story.append(Paragraph(" Candidate Starts for %s: " % gene.full_name, text_style))
             story.append(Paragraph("     " + candidate_starts, text_style))
@@ -792,9 +823,18 @@ def make_pham_text(args, pham, pham_no, output_dir, only_pham=False):
                 else:
                     candidate_starts += '(' + str(start_num) + ', ' + str(gene.alignment_index_to_coord(start)) + '), '
 
-            story.append(Paragraph(" Gene: %s \n Start: %s, Stop: %s, Start Num: %s " % (gene.full_name,
-                                   gene.start_codon_location, gene.stop_codon_location,
-                                   gene.suggested_start["current_start_number"]), text_style))
+            gap = gap_map.get(gene.full_name)
+            gap_text = "N/A" if gap is None else str(gap)
+
+            story.append(Paragraph(
+                " Gene: %s <br/> Start: %s, Stop: %s, Start Num: %s, Gap Score: %s " %
+                (gene.full_name,
+                 gene.start_codon_location,
+                 gene.stop_codon_location,
+                 gene.suggested_start["current_start_number"],
+                 gap_text),
+                text_style
+            ))
 
             story.append(Paragraph(" Candidate Starts for %s: " % gene.full_name, text_style))
             story.append(Paragraph("     " + candidate_starts, text_style))

@@ -27,6 +27,11 @@ import csv
 from . import annotate
 from collections import Counter
 
+# for the phamerator api pulls:
+
+import json
+import os
+from .phamerator_api import fetch_phage_genes, gap_map_from_genes
 
 class Report(object):
     def __init__(self, name=None):
@@ -61,6 +66,26 @@ class PhageReport(Report):
 
     def final_report(self):
         self.get_phams()
+
+        # ---- Phamerator gap scores (save to JSON for the PDF subprocess)
+        try:
+            dataset = "Actino_Draft"
+            if dataset:
+                print("[starterator] pulling Phamerator gaps for", self.name, "dataset", dataset, flush=True)
+
+                genes_json = fetch_phage_genes(dataset=dataset, phage=self.name)
+                gap_map = gap_map_from_genes(genes_json)
+
+                out_path = os.path.join(self.output_dir, f"{self.name}_phamerator_gaps.json")
+                with open(out_path, "w") as f:
+                    json.dump(gap_map, f)
+
+                print("[starterator] wrote", out_path, "entries:", len(gap_map), flush=True)
+            else:
+                print("[starterator] PHAMERATOR_DATASET not set; skipping Phamerator gaps", flush=True)
+        except Exception as e:
+            print("[starterator] WARNING: Phamerator gaps failed:", e, flush=True)
+
         for phm in self._phams.keys():
             if self._phams[phm][0].orientation == 'R' and self._phams[phm][0].start == self.seq_length:
                 print('found probable broken gene, deleting ' + self._phams[phm][0].gene_id + ' from list to starterate')
