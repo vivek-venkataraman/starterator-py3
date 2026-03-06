@@ -687,9 +687,11 @@ def make_pham_text(args, pham, pham_no, output_dir, only_pham=False):
 
     # gap scoresa
     gap_map = {}
+    gap_map_ci = {}
     if args.phage:
         gap_map = load_gap_map(output_dir, args.phage)
         print("[making_files] gap map entries:", len(gap_map), flush=True)
+        gap_map_lower = {k.lower(): v for k, v in gap_map.items()}
 
     # increase leading a bit
     styles["Normal"].leading = 14
@@ -795,8 +797,15 @@ def make_pham_text(args, pham, pham_no, output_dir, only_pham=False):
                 else:
                     candidate_starts += '(' + str(start_num) + ', ' + str(gene.alignment_index_to_coord(start)) + '), '
 
-            gap = gap_map.get(gene.full_name)
-            gap_text = "N/A" if gap is None else str(gap)
+            for gene in gene_list:
+                ...
+
+
+            for gene in genes_in_phage:
+                gene_num = gene.full_name.split("_")[-1]  # "Badulia_28" -> "28"
+                key = f"{args.phage}_CDS_{gene_num}".lower()  # -> "badulia_cds_28"
+                gap = gap_map_lower.get(key)
+                gap_text = "N/A" if gap is None else str(gap)
 
             story.append(Paragraph(
                 " Gene: %s <br/> Start: %s, Stop: %s, Start Num: %s, Gap Score: %s " %

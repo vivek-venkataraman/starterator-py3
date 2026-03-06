@@ -76,7 +76,7 @@ class PhageReport(Report):
                 genes_json = fetch_phage_genes(dataset=dataset, phage=self.name)
                 gap_map = gap_map_from_genes(genes_json)
 
-                out_path = os.path.join(self.output_dir, f"{self.name}_phamerator_gaps.json")
+                out_path = os.path.join(self.output_dir, f"{self.name.lower()}_phamerator_gaps.json")
                 with open(out_path, "w") as f:
                     json.dump(gap_map, f)
 

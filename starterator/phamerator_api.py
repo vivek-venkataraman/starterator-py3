@@ -7,12 +7,12 @@ def fetch_phage_genes(dataset: str, phage: str, base_url: str = "https://phamera
     Calls:
       https://phamerator.org/api/<dataset>/genes/<phage>
 
-    environment variables contian login information
+    *environment variables contian login information
     """
     username = os.environ.get("PHAMERATOR_USERNAME")
     password = os.environ.get("PHAMERATOR_PASSWORD")
     if not username or not password:
-        raise RuntimeError("Missing PHAMERATOR_USERNAME / PHAMERATOR_PASSWORD env vars")
+        raise RuntimeError("Missing environment variables")
 
     url = f"{base_url.rstrip('/')}/api/{dataset}/genes/{phage}"
 
