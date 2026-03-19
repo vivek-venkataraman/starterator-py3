@@ -31,7 +31,7 @@ from collections import Counter
 
 import json
 import os
-from .phamerator_api import fetch_phage_genes, gap_map_from_genes
+from .phamerator_api import fetch_phamerator_genes
 
 class Report(object):
     def __init__(self, name=None):
@@ -73,7 +73,7 @@ class PhageReport(Report):
             if dataset:
                 print("[starterator] pulling Phamerator gaps for", self.name, "dataset", dataset, flush=True)
 
-                genes_json = fetch_phage_genes(dataset=dataset, phage=self.name)
+                genes_json = fetch_phamerator_genes(dataset=dataset, phage=self.name)
                 gap_map = gap_map_from_genes(genes_json)
 
                 out_path = os.path.join(self.output_dir, f"{self.name.lower()}_phamerator_gaps.json")

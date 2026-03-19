@@ -1,20 +1,18 @@
 import os
 import requests
 
-
-def fetch_phage_genes(dataset: str, phage: str, base_url: str = "https://phamerator.org"):
+# change to only fetch required genes
+def fetch_genes_by_phage(phage_name: str, dataset: str = "Actino_Draft", base_url: str = "https://phamerator.org"):
     """
-    Calls:
-      https://phamerator.org/api/<dataset>/genes/<phage>
-
-    *environment variables contian login information
+    https://phamerator.org/api/<dataset>/genes/<phage_name>
+    PHAMERATOR_USERNAME / PHAMERATOR_PASSWORD env vars
     """
     username = os.environ.get("PHAMERATOR_USERNAME")
     password = os.environ.get("PHAMERATOR_PASSWORD")
     if not username or not password:
-        raise RuntimeError("Missing environment variables")
+        raise RuntimeError("Missing PHAMERATOR_USERNAME / PHAMERATOR_PASSWORD env vars")
 
-    url = f"{base_url.rstrip('/')}/api/{dataset}/genes/{phage}"
+    url = f"{base_url.rstrip('/')}/api/{dataset}/genes/{phage_name}"
 
     print("[phamerator] GET", url, flush=True)
     r = requests.get(url, auth=(username, password), timeout=30)
@@ -22,19 +20,20 @@ def fetch_phage_genes(dataset: str, phage: str, base_url: str = "https://phamera
 
     if r.status_code in (401, 403):
         raise RuntimeError("Phamerator auth failed (401/403)")
-    if r.status_code < 200 or r.status_code >= 300:
+    if not (200 <= r.status_code < 300):
         raise RuntimeError(f"Phamerator API error {r.status_code}: {(r.text or '')[:200]}")
+
+#convert json file to dictionary instead of in json format***
 
     return r.json()
 
 
-def gap_map_from_genes(genes_json):
-    """
-    Turns the gene list into:
-      { "Phage_CDS_1": 17, "Phage_CDS_2": 0, ... }
-    """
-    gap_map = {}
-    for g in genes_json:
-        gene_id = g.get("geneID") or g.get("name") or g.get("id")
-        gap_map[str(gene_id)] = g.get("gap")
-    return gap_map
+
+
+# processing the json data to return genes from the json: takes only 1 json file at a time for a single gene
+
+
+def fetch_genes_by_pham
+    # endpoint is /phamily/pham #
+
+# return as dictionary

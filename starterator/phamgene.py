@@ -24,6 +24,10 @@ import subprocess
 import math
 import os
 
+# imports for phamerator_api
+from functools import cached_property
+from .phamerator_api import fetch_phamerator_genes
+
 
 def get_protein_sequences():
     proteins = []
