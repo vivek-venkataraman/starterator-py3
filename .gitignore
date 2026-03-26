@@ -1,2 +1,4 @@
 starterator/*.pyc
 .idea/
+.venv
+Protein

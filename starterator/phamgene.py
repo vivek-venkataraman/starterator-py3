@@ -9,24 +9,24 @@
 # April 4, 2014
 # Class and functions for pham genes
 
-from phage import new_phage
-from database import DB
+from .phage import new_phage
+from .database import DB, get_db
 from Bio.Blast import NCBIXML
-from Bio.Blast.Applications import NcbiblastpCommandline as Blastp
-# from Bio.Blast.Applications import BlastallCommandline
 from Bio.SeqRecord import SeqRecord
-from Bio.Alphabet import IUPAC
 from Bio.Seq import Seq
 from Bio import SeqIO
 from Bio.SeqFeature import SeqFeature, FeatureLocation
 import re
-from database import get_db
 from itertools import groupby
-import utils
-from utils import StarteratorError, clean_up_files
+from . import utils
+from .utils import StarteratorError, clean_up_files
 import subprocess
 import math
 import os
+
+# imports for phamerator_api
+from functools import cached_property
+from .phamerator_api import fetch_genes_by_phage
 
 
 def get_protein_sequences():
@@ -34,7 +34,8 @@ def get_protein_sequences():
     results = get_db().query('SELECT GeneID, Translation from gene')
     for row in results:
         gene_id = row[0].replace("-", "_")
-        protein = SeqRecord(Seq(row[1].replace('-', ''), IUPAC.protein),
+        translation = utils.decode_if_bytes(row[1])
+        protein = SeqRecord(Seq(translation.replace('-', '')),
                             id=gene_id+"_", name=row[0], description=gene_id)
         proteins.append(protein)
     return proteins
@@ -47,14 +48,19 @@ def update_protein_db():
         fasta_file = os.path.join(utils.PROTEIN_DB, "Proteins.fasta")
         SeqIO.write(proteins, fasta_file, 'fasta')
     except:
-        print "creating proteins folder in correct place"
+        print("creating proteins folder in correct place")
         utils.create_folders()
         fasta_file = os.path.join(utils.PROTEIN_DB, "Proteins.fasta")
         SeqIO.write(proteins, fasta_file, 'fasta')
 
-    blast_db_command = [utils.BLAST_DIR + 'makeblastdb', '-in', "\"" + fasta_file + "\"",
-                        "-dbtype", "prot", "-title", "Proteins", "-out", "%s" % fasta_file]
-    print blast_db_command
+    blast_db_command =  [
+           'makeblastdb',
+           '-in', fasta_file,
+           '-dbtype', 'prot',
+           '-title', 'Proteins',
+           '-out', fasta_file
+    ]
+    # print blast_db_command
     # else:
     #     blast_db_command = [BLAST_DIR + 'formatdb',
     #                 '-i', "\""+ fasta_file+ "\"",
@@ -67,7 +73,7 @@ def update_protein_db():
 def check_protein_db(count):
     results = get_db().query('SELECT count(*) from gene')
     new_count = results[0][0]
-    print new_count
+    # print new_count
     if int(new_count) != int(count):
         update_protein_db()
         config = utils.get_config()
@@ -79,23 +85,23 @@ def get_pham_no(phage_name, gene_number):
     """
         Gets the pham number of a gene, given the phage name and the gene number
     """
-    print phage_name, gene_number
+    # print phage_name, gene_number
     db = DB()
     query = "SELECT pham.Name \n\
             FROM gene JOIN pham ON gene.GeneID = pham.GeneID \n\
             JOIN phage ON gene.PhageID = phage.PhageID \n\
             WHERE (phage.Name LIKE %s or phage.PhageID = %s) AND gene.Name RLIKE %s \n\
             "% (phage_name + "%", phage_name, '^[:alpha:]*(_)*%s$' % str(gene_number))
-    print query
+    # print query
     try:
         results = db.query("SELECT pham.Name \n\
             FROM gene JOIN pham ON gene.GeneID = pham.GeneID \n\
             JOIN phage ON gene.PhageID = phage.PhageID \n\
             WHERE (phage.Name LIKE %s or phage.PhageID = %s) AND gene.geneid RLIKE %s",
             (phage_name + "%", phage_name, '^([[:alnum:]]*_)*([[:alpha:]])*%s$' % str(gene_number)))
-        print "DB query 1"
+        # print "DB query 1"
         if len(results) < 1:
-            print "DB query 1 failed, try search 2"
+            # print "DB query 1 failed, try search 2"
             results = db.query("SELECT pham.Name \n\
                 FROM gene JOIN pham ON gene.GeneID = pham.GeneID \n\
                 JOIN phage ON gene.PhageID = phage.PhageID \n\
@@ -103,14 +109,14 @@ def get_pham_no(phage_name, gene_number):
                 (phage_name + "%", phage_name, '^([[:alnum:]]*_)*([[:alpha:]])*%s$' % str(gene_number)))
         if len(results) < 1:
             #try to determine root of gene names since they are
-            print "DB query 2 failed, try search 3"
+            # print "DB query 2 failed, try search 3"
             results = db.query("SELECT pham.Name \n\
                 FROM gene JOIN pham ON gene.GeneID = pham.GeneID \n\
                 JOIN phage ON gene.PhageID = phage.PhageID \n\
                 WHERE gene.geneid LIKE %s AND gene.geneID RLIKE %s",
                    (phage_name + "%", '^([[:alnum:]]*_)*([[:alpha:]])*%s$' % str(gene_number)))
 
-        print results
+        # print results
         row = results[0]
         pham_no = row[0]
         return str(pham_no)
@@ -133,29 +139,29 @@ def find_upstream_stop_site(start, stop, orientation, phage_sequence):
             if start + ahead_of_start > len(phage_sequence):     # i.e. hit end of phage while looking for stop
                 ahead_of_start = len(phage_sequence) - start   # start is zero based counting
                 ahead_of_start = ahead_of_start - ahead_of_start % 3
-                sequence = Seq(phage_sequence[stop:(start+ahead_of_start)], IUPAC.unambiguous_dna)
+                sequence = Seq(phage_sequence[stop:(start+ahead_of_start)])
                 sequence = sequence.reverse_complement()
                 return sequence, ahead_of_start
 
-            sequence = Seq(phage_sequence[stop:(start+ahead_of_start)], IUPAC.unambiguous_dna)
+            sequence = Seq(phage_sequence[stop:(start+ahead_of_start)])
             sequence = sequence.reverse_complement()
             if stop < 400:
                 return sequence, ahead_of_start
         else:
             if start < ahead_of_start:
                 ahead_of_start = start - start % 3
-                sequence = Seq(phage_sequence[(start-ahead_of_start):stop], IUPAC.unambiguous_dna)
+                sequence = Seq(phage_sequence[(start-ahead_of_start):stop])
                 return sequence, ahead_of_start
             if stop < start:
                 end_sequence = phage_sequence[(start-ahead_of_start):]
                 start_sequence = phage_sequence[:stop]
-                sequence = Seq(end_sequence+start_sequence, IUPAC.unambiguous_dna)
+                sequence = Seq(end_sequence+start_sequence)
             else:
-                sequence = Seq(phage_sequence[(start-ahead_of_start):stop], IUPAC.unambiguous_dna)
+                sequence = Seq(phage_sequence[(start-ahead_of_start):stop])
         sequence_ahead_of_start = sequence[:ahead_of_start]
         sequence_ahead_of_start = sequence_ahead_of_start[::-1]
         
-        for index in xrange(0, len(sequence_ahead_of_start), 3):
+        for index in range(0, len(sequence_ahead_of_start), 3):
             codon = str(sequence_ahead_of_start[index:index+3])
             if codon in stop_codons:
                 new_ahead_of_start = index
@@ -178,12 +184,14 @@ class Gene(object):
 
 pham_genes = {}
 
+PRINTED_BAD_STARTS = set()
 
-def new_PhamGene(db_id, start, stop, orientation, phage_id, phage_sequence=None):
+
+def new_PhamGene(db_id, start, stop, orientation, phage_id, name, phage_sequence=None):
     if db_id is None:
         return UnPhamGene(db_id, start, stop, orientation, phage_id, phage_sequence)
     if pham_genes.get(db_id, True):
-        pham_genes[db_id] = PhamGene(db_id, start, stop, orientation, phage_id)
+        pham_genes[db_id] = PhamGene(db_id, start, stop, orientation, phage_id, name)
     return pham_genes[db_id]
 
 
@@ -208,14 +216,20 @@ def get_gene_number(gene_name):
 
 
 class PhamGene(Gene):
-    def __init__(self, db_id, start, stop, orientation, phage_id, pham_no=None):
+    _phage_gap_cache = {}
+    def __init__(self, db_id, start, stop, orientation, phage_id, name, pham_no=None):
         self.db_id = db_id
+        self.gene_id = db_id
         self.phage_id = phage_id
         self.start = start
         self.stop = stop
         self.cluster = None
+        self.subcluster = None
         self.cluster_hash = None
         self.locustag = None
+        self.gene_no = name
+        self.full_name = self.phage_id + "_" + self.gene_no
+
         self.status = None # 'draft' = auto-annotated, 'final' = final/approved, 'gbk' imported non Pitt phage
 
         if orientation == 'R':
@@ -232,6 +246,23 @@ class PhamGene(Gene):
         self.ahead_of_start = None
         self.sequence = self.make_gene()
         self.candidate_starts = self.add_candidate_starts()
+
+        # --- QC: adjacent-start clusters and "bad starts" (all-but-last in each cluster) ---
+        self.adjacent_candidate_start_groups = self._find_adjacent_start_groups(self.candidate_starts)
+
+        # Flatten clusters into a single "bad starts" list:
+        # for each adjacent run [a,b,c], treat [a,b] as bad (drop last), then merge across runs.
+        bad = []
+        for grp in self.adjacent_candidate_start_groups:
+            if len(grp) >= 2:
+                bad.extend(grp[:-1])
+        self.bad_adjacent_candidate_starts = sorted(set(bad))
+        self.has_bad_adjacent_candidate_starts = bool(self.bad_adjacent_candidate_starts)
+
+        if self.has_bad_adjacent_candidate_starts:
+            print(
+                f"[QC] bad adjacent starts (offsets) gene={getattr(self, 'gene_no', getattr(self, 'number', '?'))}: {self.bad_adjacent_candidate_starts}")
+
         self.alignment = None
         self.alignment_start_site = None
         self.alignment_candidate_starts = None
@@ -255,15 +286,15 @@ class PhamGene(Gene):
         """
         phage = new_phage(phage_id=self.phage_id)
         self.phage_name = phage.get_name()
-        gene_no = self.db_id.split("_")[-1]
-        gene_no = gene_no.split(" ")[0]
-        self.gene_id = self.phage_name + "_" + gene_no
-        self.gene_id = self.gene_id.replace('-', "_")
+        self.name = self.phage_name + "_" + self.gene_no
         self.cluster = phage.cluster
-        if self.cluster == None:
+        if self.cluster is None:
             self.cluster = "singleton"
-        self.cluster_hash = sum([pow(ord(elem), i+1) for i, elem in enumerate(self.cluster)])
-
+        if phage.subcluster:
+            self.subcluster = phage.subcluster
+        else:
+            self.subcluster = self.cluster
+        self.cluster_hash = sum([pow(ord(elem), i+1) for i, elem in enumerate(self.subcluster)])
         status = phage.get_status()
         if status == 'final':        # values of 'draft' or 'gbk' considered draft quality by starterator
             self.draftStatus = False
@@ -278,7 +309,7 @@ class PhamGene(Gene):
         sequence, self.ahead_of_start = find_upstream_stop_site(
                                 self.start, self.stop, self.orientation, phage_sequence)
         self.ahead_of_start_coord = self.start - self.ahead_of_start
-        gene = SeqRecord(sequence, id=self.gene_id, name=self.gene_id,
+        gene = SeqRecord(sequence, id=self.gene_id, name=self.name,
                          description="|%i-%i| %s" % (self.start, self.stop, self.orientation))
         return gene
 
@@ -289,11 +320,37 @@ class PhamGene(Gene):
         gene_sequence = self.sequence.seq
         starts = []
         start_codons = ['ATG', 'GTG', 'TTG']
-        for index in xrange(0, len(gene_sequence), 3):
+        for index in range(0, len(gene_sequence), 3):
             codon = str(gene_sequence[index:index+3])
             if codon in start_codons:
                 starts.append(index)
         return sorted(starts)
+
+    def _find_adjacent_start_groups(self, candidate_starts):
+        """Returns groups of start sites that are adjacent in the same ORF (exactly 3 apart)
+
+        groups neighboring start sites, ignoring ones that aren't adjacent
+
+        bad_starts should NOT be called. Starts where there is at least 1 start codon immediately following it.
+        """
+
+        starts_sorted = sorted(candidate_starts)
+        bad_groups = []
+        current = [starts_sorted[0]]
+
+        for s in starts_sorted[1:]:
+            if s - current[-1] == 3:
+                current.append(s)
+            else:
+                if len(current) >= 2:
+                    bad_groups.append(current)
+                current = [s]
+
+        if len(current) >= 2:
+            bad_groups.append(current)
+        return bad_groups
+
+
 
     def add_alignment_start_site(self):
         """
@@ -328,7 +385,7 @@ class PhamGene(Gene):
         return aligned_starts
 
     def add_alignment_start_stats(self, pham):
-        annotated = [gene.gene_id for gene in pham.stats['most_common']['annot_list']]
+        annotated = [gene.full_name for gene in pham.stats['most_common']['annot_list']]
         self.alignment_candidate_start_nums = []
         self.alignment_candidate_start_counts = []
         self.alignment_annot_start_nums = []
@@ -342,8 +399,8 @@ class PhamGene(Gene):
 
         num_gene_in_pham = len(pham.genes)
 
-        for startnum, genelist in pham.stats['most_common']['possible'].iteritems():
-            if self.gene_id in genelist:
+        for startnum, genelist in pham.stats['most_common']['possible'].items():
+            if self.full_name in genelist:
                 self.alignment_candidate_start_nums.append(startnum)
 
         for num in self.alignment_candidate_start_nums:
@@ -362,8 +419,8 @@ class PhamGene(Gene):
                 self.alignment_annot_start_nums.append(num)
                 self.alignment_annot_start_counts.append(annot_count)
 
-        for startnum, genelist in pham.stats['most_common']['called_starts'].iteritems():
-            if self.gene_id in genelist:
+        for startnum, genelist in pham.stats['most_common']['called_starts'].items():
+            if self.full_name in genelist:
                 self.alignment_start_num_called = startnum
 
         if len(self.alignment_annot_start_counts) > 0:
@@ -401,7 +458,7 @@ class PhamGene(Gene):
                 The coordinate is 1 based count, not zero based
         """
         new_start_index = 0
-        for i in xrange(0, index):
+        for i in range(0, index):
             if self.alignment.seq[i] != '-':
                 new_start_index += 1
         if self.orientation == 'R':
@@ -442,7 +499,7 @@ class PhamGene(Gene):
             else:
                 start_point = breakpoints[end_point_index - 1]
 
-            seq_feature = SeqFeature(FeatureLocation(start_point, end_point), type=type_of_block, strand=None)
+            seq_feature = SeqFeature(FeatureLocation(start_point, end_point), type=type_of_block)
             self.alignment.features.append(seq_feature)
 
     def has_valid_start(self):
@@ -469,7 +526,7 @@ class PhamGene(Gene):
         self.sequence.features.sort()
         other.sequence.features.sort()
         for feature1, feature2 in zip(self.sequence.features, other.sequence.features):
-            print "phamgene.is_equal comparing features"
+            print("phamgene.is_equal comparing features")
             if feature1.location.start != feature2.location.start:
                 return False
             if feature1.location.end != feature2.location.end:
@@ -488,6 +545,7 @@ class PhamGene(Gene):
         self.locustag = db_return[2]
         return
 
+#test
     def __repr__(self):
         return 'Phamgene for %s' % self.gene_id
 
@@ -497,13 +555,18 @@ class UnPhamGene(PhamGene):
         self.number = number
         self.phage_name = phage_name
         self.gene_id = "%s_%s" % (phage_name, number)
+        self.full_name = self.gene_id
+        self.name = number
         self.start = start-1
         self.stop = stop
         self.orientation = orientation
         self.pham_size = None
         self.pham_no = None
         self.cluster = "Unassigned"
-        self.cluster_hash = sum([pow(ord(elem), i + 1) for i, elem in enumerate(self.cluster)])
+        self.subcluster = "Unassigned"
+        self.cluster_hits = None
+        self.subcluster_hits = None
+        self.cluster_hash = sum([pow(ord(elem), i + 1) for i, elem in enumerate(self.subcluster)])
 
 
         if orientation == 'R':
@@ -515,6 +578,27 @@ class UnPhamGene(PhamGene):
 
         self.sequence = self.make_gene(phage_sequence)
         self.candidate_starts = self.add_candidate_starts()
+
+        # --- QC: adjacent-start clusters and "bad starts" (all-but-last in each cluster) ---
+        self.adjacent_candidate_start_groups = self._find_adjacent_start_groups(self.candidate_starts)
+
+        bad = []
+        for grp in self.adjacent_candidate_start_groups:
+            if len(grp) >= 2:
+                bad.extend(grp[:-1])
+        self.bad_adjacent_candidate_starts = sorted(set(bad))
+        self.has_bad_adjacent_candidate_starts = bool(self.bad_adjacent_candidate_starts)
+
+
+
+
+
+# test change
+
+        if self.has_bad_adjacent_candidate_starts:
+            print(
+                f"[QC] bad adjacent starts (offsets) gene={getattr(self, 'gene_no', getattr(self, 'number', '?'))}: {self.bad_adjacent_candidate_starts}")
+
         self.alignment = None
         self.alignment_start = None
         self.alignment_candidate_starts = None
@@ -537,16 +621,33 @@ class UnPhamGene(PhamGene):
         gene = SeqRecord(sequence, id=self.gene_id, name=self.gene_id)
         return gene
 
+    def phambymatch(self):
+        #try to must make a perfect match to the translation field
+        protein = str(self.sequence[self.ahead_of_start:].seq.translate())
+        #repair translations if start codon was TTG or GTG and remove stop codon
+        protein = "M" + protein[1:-1]
+        db = DB()
+        result = db.query("SELECT GeneID FROM gene WHERE gene.Translation = %s", protein)
+        if len(result) < 1:
+            return None
+        else:
+            result2 = db.query("SELECT phamid FROM gene WHERE geneid = %s", result[0])
+            print("pham %s by exact match to gene %s"%(result2[0],result[0]))
+            number, = result2[0]
+            self.pham_no = number
+
+            return self.pham_no
+
     def blast(self):
         # not sure where to put this... this makes more sense, 
         # but I wanted to keep the Genes out of file making...
-        print "Running BLASTp"
+        # print "Running BLASTp"
         try:
             result_handle = open("%s/%s.xml" % (utils.INTERMEDIATE_DIR, self.gene_id))
             result_handle.close()
         except:
             protein = SeqRecord(self.sequence[self.candidate_starts[0]:].seq.translate(), id=self.gene_id)
-            print protein, self.sequence
+            # print protein, self.sequence
             # short proteins need lower e_value
             query_len = (self.stop - self.start) / 3
             if query_len < 50:
@@ -555,11 +656,7 @@ class UnPhamGene(PhamGene):
                 e_value = math.pow(10, -20)
 
             SeqIO.write(protein, '%s/%s.fasta' % (utils.INTERMEDIATE_DIR, self.gene_id), 'fasta')
-            blast_command = Blastp(
-                            query='%s%s.fasta' % (utils.INTERMEDIATE_DIR, self.gene_id),
-                            db="\"%s/\"" % (os.path.abspath(utils.PROTEIN_DB)), evalue=e_value, outfmt=5,
-                            out="%s.xml" % (os.path.join(utils.INTERMEDIATE_DIR, self.gene_id)))
-            # print self.gene_id, "\"%sProteins\"" % (utils.PROTEIN_DB)
+            # Using subprocess approach instead of deprecated Bio.Application
             blast_args = ["%sblastp" % utils.BLAST_DIR,
                           "-out", '%s/%s.xml' % (utils.INTERMEDIATE_DIR, self.gene_id),
                           "-outfmt", "5",
@@ -567,7 +664,7 @@ class UnPhamGene(PhamGene):
                           "-db", "\"%s/Proteins.fasta\"" % (utils.PROTEIN_DB),
                           "-evalue", str(e_value)
                           ]
-            print " ".join(blast_args)
+            # print " ".join(blast_args)
             try:
                 subprocess.check_call(blast_args)
             except:
@@ -585,25 +682,52 @@ class UnPhamGene(PhamGene):
             result_handle.close()
             result_handle = open('%s/%s.xml' % (self.output_dir, self.name))
             blast_records = NCBIXML.parse(result_handle)
-            blast_record = blast_records.next()
+            blast_record = next(blast_records)
 
         if len(blast_record.descriptions) > 0:
             first_result = blast_record.descriptions[0].title.split(',')[0].split(' ')[-1]
-            print first_result
+            # print first_result
             if "_" not in first_result:
                 first_result = blast_record.descriptions[1].title.split(',')[0].split(' ')[-1]
-
-            phage_name = first_result.split("_")[0]
-            #exception for error in locus tags specific to this phage:
-            if phage_name == 'FRIAPREACHER':
-                phage_name = 'FRIARPREACHER'
-            if phage_name.lower() == "draft":
-                phage_name = first_result.split("_")[-3]
-            gene_number = first_result.split("_")[-1]
-            print phage_name, gene_number
-            pham_no = get_pham_no(phage_name, gene_number)
-            self.pham_no = pham_no
-            return pham_no
+            # Try to get pham directly from gene name
+            db = DB()
+            results = db.query("SELECT phamid from gene where geneID = %s", first_result)
+            if len(results) == 1:
+                number, = results[0]
+                self.pham_no = number
+                return number
+            else:
+                phage_name = first_result.split("_")[0]
+                #exception for error in locus tags specific to this phage:
+                if phage_name == 'FRIAPREACHER':
+                    phage_name = 'FRIARPREACHER'
+                if phage_name.lower() == "draft":
+                    phage_name = first_result.split("_")[-3]
+                gene_number = first_result.split("_")[-1]
+                # print phage_name, gene_number
+                pham_no = get_pham_no(phage_name, gene_number)
+                self.pham_no = pham_no
+                return pham_no
         else:
             self.pham_no = None
             return None
+
+    def add_cluster_hits(self):
+        self.cluster_hits = []
+        db = DB()
+        result = db.query("SELECT distinct(phage.cluster) FROM phage JOIN gene on gene.phageid = phage.phageid\
+                           WHERE gene.phamid = %s", self.pham_no)
+
+        for item in result:
+            hit = list(item)[0]
+            if hit is not None:
+                self.cluster_hits.append(hit)
+
+        self.subcluster_hits = []
+        result2 = db.query("SELECT distinct(phage.subcluster) FROM phage JOIN gene on gene.phageid = phage.phageid\
+                           WHERE gene.phamid = %s", self.pham_no)
+        for item in result2:
+            hit2 = list(item)[0]
+            if hit2 is not None:
+                self.subcluster_hits.append(hit2 )
+

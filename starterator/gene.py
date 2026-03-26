@@ -1,2 +1,3 @@
 
 class Gene():
+    pass

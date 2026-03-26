@@ -1,0 +1,72 @@
+# Starterator Batch Processing Docker Image
+# Using Python 3.13 (latest stable as of 2025)
+FROM python:3.13-slim
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    # BLAST+ for sequence similarity searches
+    ncbi-blast+ \
+    # ClustalW for multiple sequence alignment  
+    clustalw \
+    clustalo \
+    parallel \
+    vim \
+    # Build tools for Python packages
+    gcc \
+    g++ \
+    # Clean up package cache
+    && rm -rf /var/lib/apt/lists/*
+
+# Set working directory
+WORKDIR /app
+
+# Copy requirements first for better Docker layer caching
+COPY requirements.txt .
+
+# Install Python dependencies
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy application code
+COPY starterator/ ./starterator/
+
+# Create directories for temporary and output files
+RUN mkdir -p /tmp/starterator_temp /app/reports /app/config
+
+# Create non-root user for security
+RUN useradd -m -u 1000 starterator && \
+    chown -R starterator:starterator /app /tmp/starterator_temp
+
+# Switch to non-root user
+USER starterator
+
+# Set environment variables for batch processing
+ENV PYTHONPATH=/app
+ENV DB_HOST=""
+ENV DB_NAME=""
+ENV DB_USER=""
+ENV DB_PASSWORD=""
+ENV DB_PORT="3306"
+
+# Configure default paths
+ENV BLAST_DIR="/usr/bin/"
+ENV CLUSTALW_DIR="/usr/bin/"
+ENV CONFIG_DIR="/app/config"
+ENV INTERMEDIATE_DIR="/tmp/starterator_temp"
+ENV FINAL_DIR="/app/reports"
+
+# Set the entrypoint to the starterate script
+WORKDIR /app/starterator
+ENTRYPOINT ["python3", "starterate.py"]
+
+# Default command is batch processing
+CMD ["--all-phams"]
+
+# Health check to verify the application can start
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD python3 starterate.py --help > /dev/null || exit 1
+
+# Labels for metadata
+LABEL maintainer="Starterator Project"
+LABEL description="Starterator batch processing for phage start site analysis"
+LABEL version="2.0-python3"
+LABEL org.opencontainers.image.source="https://github.com/SEA-PHAGES/starterator"

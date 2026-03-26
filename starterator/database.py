@@ -16,9 +16,12 @@
 
 
 
-import MySQLdb
+import pymysql
+pymysql.install_as_MySQLdb()
+import pymysql as MySQLdb
 import time
-from utils import get_config, StarteratorError
+import os
+from .utils import get_config, StarteratorError
 
 class DB(object):
 
@@ -28,11 +31,15 @@ class DB(object):
         self._db = None
         args = {}
         config = get_config()
-        args["user"] = config["database_user"]
-        args["passwd"] = config["database_password"]
-        args["db"] = config["database_name"]
-        args["host"] = config["database_server"]
-        args["port"] =  3307
+        args["user"] = os.getenv("DB_USER", config.get("database_user", ""))
+        args["password"] = os.getenv("DB_PASSWORD", config.get("database_password", ""))
+        args["database"] = os.getenv("DB_NAME", config.get("database_name", ""))
+        args["host"] = os.getenv("DB_HOST", config.get("database_server", "localhost"))
+        args["port"] = int(os.getenv("DB_PORT", config.get("database_port", "3306")))
+
+        # Only use unix_socket for local connections
+        if args["host"] in ["localhost", "127.0.0.1", "::1"] and not os.getenv("DB_HOST"):
+            args["unix_socket"] = "/var/run/mysqld/mysqld.sock"
         self.host = "{0}:{1}".format(args['host'], args['port'])
 
         self._db_args = args
@@ -69,16 +76,35 @@ class DB(object):
             cursor.close()
 
     def query(self, query, params=None):
+        '''
         cursor = self._cursor()
         try:
             self._execute(cursor, query, params)
             result = cursor.fetchall()
-            return result
+            return result.
         except:
             self.reconnect()
             self.query(query, params)
         finally:
             cursor.close()
+        '''
+        #Potential fix for connection error from github copilot
+        cursor = self._cursor()
+        try:
+            self._execute(cursor, query, params)
+            result = cursor.fetchall()
+            return result
+        except MySQLdb.OperationalError as e:
+            print("OperationalError: %s" % e)
+            self.reconnect()
+            return self.query(query, params)
+        finally:
+            if cursor:
+                try:
+                    cursor.close()
+                except MySQLdb.OperationalError as e:
+                    print("Error closing cursor: %s" % e)
+
 
     def get(self, query, params):
         """Returns the first row returned for the given query."""
@@ -106,12 +132,17 @@ class DB(object):
 
     def _execute(self, cursor, query, params):
         try:
-            return cursor.execute(query, params)
+            if params is None:
+                return cursor.execute(query)
+            elif isinstance(params, tuple):
+                return cursor.execute(query, params)
+            else:
+                return cursor.execute(query, (params,))
         except MySQLdb.OperationalError:
-            print "Error connecting to MySQL on %s", self.host
+            print("Error connecting to MySQL on %s" % self.host)
             self.close()
             raise StarteratorError("Error connecting to database! Please enter correct login credentials in Preferences menu.")
-
+            
 class Row(dict):
     """A dict that allows for object-like property access syntax."""
     def __getattr__(self, name):

@@ -7,9 +7,11 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 import math
 import PyPDF2
 from Bio.Blast import NCBIXML
-from Bio.Blast.Applications import NcbiblastpCommandline as Blastp
-from Bio.Blast.Applications import BlastallCommandline
-import MySQLdb
+# Bio.Blast.Applications deprecated - using subprocess instead
+import pymysql
+pymysql.install_as_MySQLdb()
+import pymysql as MySQLdb
+import pickle
 
 class GeneReport(object):
     def __init__(self, number, phage, is_phamerated=True, fasta_file=None, is_all=False):
@@ -33,12 +35,14 @@ class GeneReport(object):
         SeqIO.write(self.protein, '%s%s.fasta' % (self.output_dir, self.name), 'fasta')
         # Run blast program with the following parameters
         e_value = math.pow(10, -30)
-        print self.legacy_blast 
+        # print self.legacy_blast
         if not self.legacy_blast:
-            blast_command = Blastp(
-                            query='%s%s.fasta' % (self.output_dir, self.name),
-                            db="\"%s\"" % self.protein_db, evalue=e_value, outfmt=5, 
-                            out='%s%s.xml' % (self.output_dir, self.name))
+            blast_command = [self.blast_dir + 'blastp', 
+                '-out', '%s%s.xml' % (self.output_dir, self.name),
+                "-outfmt", '5',
+                "-query", "%s%s.fasta" % (self.output_dir, self.name),
+                 '-db', "%s" % self.protein_db, 
+                 '-evalue', '1e-30' ]
 
             # 'blastp 
             # -out "/home/marissa/.starterator/Intermediate Files/Nilo_1.xml" 
@@ -54,7 +58,7 @@ class GeneReport(object):
             #      '-evalue', '1e-30' ]
             # for f in blast_command: print f,
             # subprocess.check_call(blast_command)
-            stdout, stderr = blast_command()
+            subprocess.check_call(blast_command)
         else:
             # blastall -p blastn -d nr -i QUERY -o out.QUERY
             # 'blastall -d /home/pbi/Dropbox/StarteratorUI/proteindb/ProteinsDB 
@@ -72,11 +76,13 @@ class GeneReport(object):
         try:
             result_handle = open('%s%s.xml' % (self.output_dir, self.name))
             blast_record = NCBIXML.read(result_handle)
-        except:
+        except ValueError:
             result_handle.close()
             result_handle = open('%s%s.xml' % (self.output_dir, self.name))
             blast_records = NCBIXML.parse(result_handle)
-            blast_record = blast_records.next()
+            blast_record = next(blast_records)
+        except Exception as e:
+            raise StarteratorError(f"BLAST to parse BLAST results {e}")
         # If there is at least one blast result, return the first result, otherwise returns None
         # E-value of 10 exp -30 or better are grouped into the same family
         if len(blast_record.descriptions) > 0:
@@ -85,16 +91,16 @@ class GeneReport(object):
             first_result_name = temp[0].split(' ')[1]
             phage_name = first_result_name.split('_')[0]
             gene_number = first_result_name.split('_')[-1]
-            print phage_name, gene_number
+            # print phage_name, gene_number
             self.pham_no =get_pham_no(self.db, phage_name, gene_number)
         else:
             self.pham_no = None
         return self.pham_no
 
     def make_unphamerated_gene(self, start, stop, orientation):
-        print 'fasta', self.fasta
+        # print 'fasta', self.fasta
         seq_file = open(self.fasta, 'r')
-        first_line = seq_file.next() 
+        first_line = next(seq_file) 
         sequence = ""
         for line in seq_file:
             sequence += line.strip()
@@ -122,7 +128,7 @@ class GeneReport(object):
         pham.put_similar_genes_together()
         start_stats = pham.most_common_start()
         pickle_file = utils.INTERMEDIATE_DIR + '%sPham%s.p' %((self.phage + one_or_all), self.pham_no)
-        cPickle.dump(pham, open(pickle_file, 'wb'))
+        pickle.dump(pham, open(pickle_file, 'wb'))
 
         subprocess.check_call(['python', utils.MAKING_FILES,
             '-p', self.phage, 
@@ -148,11 +154,15 @@ class GeneReport(object):
             Merges the graphical and text output of one pham into one PDF file
             {Phage}Pham{Number}Report.pdf
         """
-        merger = PyPDF2.PdfFileMerger()
-        graph = open("%sPham%sGraph.pdf" % (utils.INTERMEDIATE_DIR + self.phage + 'One', self.pham_no), "rb")
-        text = open('%s%sPham%sText.pdf' % (utils.INTERMEDIATE_DIR, self.phage +'One', self.pham_no), 'rb')
-        merger.append(fileobj=graph)
-        merger.append(fileobj=text)
+        merger = PyPDF2.PdfWriter()
+        with open("%sPham%sGraph.pdf" % (utils.INTERMEDIATE_DIR + self.phage + 'One', self.pham_no), "rb") as graph:
+            reader = PyPDF2.PdfReader(graph)
+            for page in reader.pages:
+                merger.add_page(page)
+        with open('%s%sPham%sText.pdf' % (utils.INTERMEDIATE_DIR, self.phage +'One', self.pham_no), 'rb') as text:
+            reader = PyPDF2.PdfReader(text)
+            for page in reader.pages:
+                merger.add_page(page)
         file_path = "%s%sPham%sReport.pdf" % (utils.FINAL_DIR, self.phage, self.pham_no)
         merger.write(open(file_path, 'wb'))
         return file_path, "%sPham%sReport.pdf" % (self.phage, self.pham_no)

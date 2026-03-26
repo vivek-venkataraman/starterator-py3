@@ -1,14 +1,156 @@
-from database import DB, get_db
-from phamgene import new_PhamGene
+import logging
+import math
+import time
+from starterator.database import DB, get_db
+from starterator.phamgene import new_PhamGene
 from Bio import AlignIO
 from Bio import SeqIO
 from collections import Counter
-import utils
+from . import utils
 import subprocess
+import multiprocessing
 import os
-from utils import StarteratorError
+from .utils import StarteratorError
 import json
+from hashlib import sha256
 
+
+def generate_pham_hashes(output_file=True):
+    db = get_db()
+
+    db_version = db.query("SELECT Version from version;")[0][0]
+
+    pham_ids = [row[0] for row in db.query("SELECT PhamID from pham;")]
+    total_phams = len(pham_ids)
+    pham_hashes = {}
+    BATCH_SIZE = 500
+    for i in range(0, len(pham_ids), BATCH_SIZE):
+        batch_phams = pham_ids[i:i+BATCH_SIZE]
+        print(f"Processing hash batch {math.floor(i / BATCH_SIZE)+1}/{math.ceil(total_phams/BATCH_SIZE)}")
+        query = """
+        SELECT phage.PhageID, phage.Cluster, phage.Subcluster, phage.Status, pham.PhamID, gene.Translation, gene.Name, gene.LocusTag, gene.Notes, gene.GeneID
+        FROM pham
+        JOIN gene ON pham.PhamID = gene.PhamID
+        JOIN phage ON gene.PhageID = phage.PhageID
+        WHERE pham.PhamID IN %s
+        ORDER BY pham.PhamID, gene.GeneID
+        """
+        db_results = db.query(query, (tuple(batch_phams),))
+        pham_groups = {}
+        for row in db_results:
+            if row[4] not in pham_groups:
+                pham_groups[row[4]] = []
+            pham_groups[row[4]].append(row)
+        # Generate hashes for each pham in the batch
+        for pham_id, genes in pham_groups.items():
+            sorted_genes = sorted(genes, key=lambda x: x[-1])  # Sort by GeneID
+            membership_data = '|'.join([g[-1] for g in sorted_genes])
+            sequences_data = '|'.join([utils.decode_if_bytes(g[5]) for g in sorted_genes])
+            annotations_data = '|'.join([g[6] for g in sorted_genes])
+            # Cluster, Subcluster, LocusTag and Status
+            metadata_data = '|'.join([f"{g[7]}|{g[8]}|{g[9]}|{g[3]}" for g in sorted_genes])
+            membership_hash = sha256(membership_data.encode()).hexdigest()
+            sequences_hash = sha256(sequences_data.encode()).hexdigest()
+            annotations_hash = sha256(annotations_data.encode()).hexdigest()
+            metadata_hash = sha256(metadata_data.encode()).hexdigest()
+            combined_hash = sha256(f"{membership_hash}|{sequences_hash}|{annotations_hash}|{metadata_hash}".encode()).hexdigest()
+            pham_hashes[pham_id] = {
+                "membership_hash": membership_hash,
+                "sequences_hash": sequences_hash,
+                "annotations_hash": annotations_hash,
+                "metadata_hash": metadata_hash,
+                "combined_hash": combined_hash,
+                "gene_count": len(sorted_genes)
+            }
+        pham_groups.clear()
+    all_combined_hashes = '|'.join([hash_info["combined_hash"] for hash_info in pham_hashes.values()])
+    overall_hash = sha256(all_combined_hashes.encode()).hexdigest()
+    hash_output = {
+        "database_version": db_version,
+        # Iso time
+        "generated_timestamp": time.ctime(),
+        "overall_hash": overall_hash,
+        "total_phams": len(pham_hashes),
+        "phams": pham_hashes
+    }
+    if output_file:
+        with open(os.path.join(utils.FINAL_DIR, f"pham_hashes_v{db_version}.json"), 'w') as f:
+            json.dump(hash_output, f, indent=2)
+        print(f"Output written to {utils.FINAL_DIR}/pham_hashes_v{db_version}.json")
+    return hash_output
+
+def compare_hashes_current(hash_file_name1, hash_file_name2):
+    """
+    Compares two hash file outputs generated from generate_pham_hashes.
+    Outputs a report with the phams with differences: add, removed, modified.
+    """
+    with open(hash_file_name1, 'r') as f:
+        hash1 = json.load(f)
+    with open(hash_file_name2, 'r') as f:
+        hash2 = json.load(f)
+    hash_report = {}
+    if hash1["overall_hash"] == hash2["overall_hash"]:
+        hash_report["overall_hash_matches"] = True
+    else:
+        hash_report["overall_hash_matches"] = False
+
+    #remove orphams from hash lists
+    hash1["phams"] = {
+        key: phams_info
+        for key, phams_info in hash1["phams"].items()
+        if phams_info.get("gene_count", 0) > 1
+    }
+
+    hash2["phams"] = {
+        key: phams_info
+        for key, phams_info in hash2["phams"].items()
+        if phams_info.get("gene_count", 0) > 1
+    }
+
+    phams1 = hash1["phams"]
+    phams2 = hash2["phams"]
+    modified_phams = []
+    phams1_ids = set(phams1.keys())
+    phams2_ids = set(phams2.keys())
+    for pham_id, pham_info in phams1.items():
+        if pham_id in phams2 and pham_info != phams2[pham_id]:
+            modified_phams.append(pham_id)
+    added_phams = phams2_ids - phams1_ids
+    removed_phams = phams1_ids - phams2_ids
+    hash_report["phams_added"] = list(added_phams)
+    hash_report["phams_removed"] = list(removed_phams)
+    hash_report["phams_modified"] = modified_phams
+
+    return hash_report
+
+def get_all_phams():
+    """Get all pham numbers from the database"""
+    db = get_db()
+    # results = db.query("SELECT DISTINCT PhamID FROM pham WHERE PhamID IS NOT NULL ORDER BY PhamID")
+    #
+    results = db.query("""select distinct gene.phamid,count(gene.phamid) as member_count from pham 
+                       join gene on gene.phamid=pham.phamid 
+                       group by gene.phamid having member_count > 1 ORDER BY member_count desc;""")
+    return [row[0] for row in results]
+
+def start_pham_job(pham_no):
+    """
+    Start a subprocess for the given pham number.
+    """
+    start_time = time.time()
+    logging.info(f"Started processing Pham {pham_no}")
+    subprocess.call(['python3', 'starterate.py', '-n', str(pham_no), '-j', 'True'])
+    logging.info(f"Finished processing Pham {pham_no} in {int(time.time()-start_time)} seconds")
+
+def process_all_phams():
+    """
+    Process all phams in the database.
+    """
+    phams = get_all_phams()
+    logging.info(f"Found {len(phams)} phams to process")
+    with multiprocessing.Pool(processes=multiprocessing.cpu_count()) as pool:
+        pool.map(start_pham_job, phams, chunksize=2)
+    logging.info("Batch pham processing complete!")
 
 def get_pham_number(phage_name, gene_number):
     try:
@@ -25,12 +167,17 @@ def get_pham_number(phage_name, gene_number):
         raise StarteratorError("Gene %s of Phage %s not found in database!" % (gene_number, phage_name))
 
 
-def get_pham_colors():
+def get_pham_colors(phams=None):
     db = DB()
-    results = db.query("SELECT `Name`, `Color` from `pham_color`;")
+    results = db.query("SELECT `PhamID`, `Color` from `pham`;")
     pham_colors = {}
-    for row in results:
-        pham_colors[str(row[0])] = row[1]
+    if phams:
+        for row in results:
+            if row[0] in phams:
+                pham_colors[str(row[0])] = row[1]
+    else:
+        for row in results:
+            pham_colors[str(row[0])] = row[1]
     return pham_colors
 
 def get_version():
@@ -59,10 +206,9 @@ class Pham(object):
             Get the genes of the Phamily
         """
         results = get_db().query("SELECT `gene`.`GeneID`, `gene`.`phageID`, " +
-                                 " `Length`, `Start`, `Stop`, `Orientation`" +
+                                 " `Length`, `Start`, `Stop`, `Orientation`, `gene`.`name`" +
                                  " FROM `gene`"
-                                 " JOIN `pham` ON `gene`.`GeneID` = `pham`.`GeneID`" +
-                                 " WHERE `pham`.`name` =%s; ", self.pham_no)
+                                 " WHERE `gene`.`PhamID` =%s; ", self.pham_no)
         genes = {}
         self.count = len(results)
         for gene_info in results:
@@ -71,7 +217,17 @@ class Pham(object):
             start = gene_info[3]
             stop = gene_info[4]
             orientation = gene_info[5]
-            gene = new_PhamGene(gene_id, start, stop, orientation, phage_id)
+            name = gene_info[6]
+            gene = new_PhamGene(gene_id, start, stop, orientation, phage_id, name)
+            # Data validations: screen out incompatible annotations:
+            # screen out phage with N's in the genome sequence:
+            genome_query_results = get_db().query("SELECT sequence FROM phage WHERE phageid = %s", phage_id)
+            genome_seq, = genome_query_results[0][0],
+            genome_seq = utils.decode_if_bytes(genome_seq)
+            if "N" in genome_seq:
+                continue
+
+            # and only keep if there is a valid start at the annotation start of the gene
             if gene.has_valid_start():
                 genes[gene.gene_id] = gene
         if len(genes) < 1:
@@ -92,8 +248,8 @@ class Pham(object):
             Get the color of the phamily from the database
         """
         try:
-            result = get_db().get("SELECT `name`, `color`\n\
-                FROM `pham_color` WHERE `name` = %s;", self.pham_no)
+            result = get_db().get("SELECT `phamid`, `color`\n\
+                FROM `pham` WHERE `phamid` = %s;", self.pham_no)
             return result[1]
         except:
             raise StarteratorError("Pham number %s not found in database!" % self.pham_no)
@@ -115,9 +271,11 @@ class Pham(object):
 
         if self.aligner == 'ClustalO':
             outfile = fasta_file.replace(".fasta", ".aln")
-            subprocess.check_call(['clustalo', '--infile=%s' % fasta_file, '--outfile=%s' % outfile, '--outfmt=clu'])
+            subprocess.check_call(['clustalo', '--infile=%s' % fasta_file, '--outfile=%s' % outfile, '--outfmt=clu', '--threads', str(multiprocessing.cpu_count())])
+            # subprocess.check_call(['clustalo', '--infile=%s' % fasta_file, '--outfile=%s' % outfile, '--outfmt=clu'])
         else:
-            subprocess.check_call(['clustalw', '-infile=%s' % (fasta_file), '-quicktree'])
+            with open(os.devnull, 'w') as devnull:
+                subprocess.check_call(['clustalw', '-infile=%s' % (fasta_file), '-quicktree', '-quiet'], stderr=devnull, stdout=devnull)
 
         aln_file = fasta_file.replace(".fasta", ".aln")
         alignment = AlignIO.read(aln_file, "clustal")
@@ -140,7 +298,7 @@ class Pham(object):
         genes = [gene.sequence for gene in self.genes.values()]
         count = SeqIO.write(genes, "%s.fasta" % file_name, "fasta")
         if len(self.genes) == 1:
-            alignment = [gene.sequence]
+            alignment = [genes[0]]
         else:
             try:
                 alignment = AlignIO.read(file_name + ".aln", "clustal")
@@ -175,7 +333,7 @@ class Pham(object):
         """
         groups = []
         i = 0
-        genes = self.genes.values()
+        genes = list(self.genes.values())
 
         grouped = [False for gene in genes]
         while i < len(self.genes):
@@ -208,21 +366,18 @@ class Pham(object):
                             groups[i] = groups[i][j:] + groups[i][:j]
             groups = groups[split_gene_lists_on:] + groups[:split_gene_lists_on]
 
-            if groups[0][0].cluster_hash is not None:
+            if groups[0][0].subcluster != 'Unassigned':
                 sort_from = groups[0][0].cluster_hash
-                if len(groups) > 1:
-                    remaining = groups[1:]
-                    remaining.sort(key=lambda x: abs(x[0].cluster_hash-sort_from))
-                    groups[1:] = remaining
             else:
                 sort_from = 1
-                if len(groups) > 1:
-                    remaining = groups[1:]
-                    remaining.sort(key=lambda x: abs(x[0].cluster_hash-sort_from))
-                    groups[1:] = remaining
+
+            if len(groups) > 1:
+                remaining = groups[1:]
+                remaining.sort(key=lambda x: abs(x[0].cluster_hash-sort_from))
+                groups[1:] = remaining
 
         else:
-            groups.sort(key=lambda x: x[0].cluster)
+            groups.sort(key=lambda x: x[0].subcluster)
 
         return groups
 
@@ -270,9 +425,9 @@ class Pham(object):
             start_stats["called_starts"][i+1] = []
             for gene in self.genes.values():
                 if site in gene.alignment_candidate_starts:
-                    start_stats["possible"][i+1].append(gene.gene_id)
+                    start_stats["possible"][i+1].append(gene.full_name)
                 if site == gene.alignment_start_site:
-                    start_stats["called_starts"][i+1].append(gene.gene_id)
+                    start_stats["called_starts"][i+1].append(gene.full_name)
 
         all_starts_count = Counter(all_start_sites)
         all_annot_count = Counter(all_annotated_start_sites)
@@ -313,33 +468,37 @@ class Pham(object):
                 start_stats['called_counts'][k] = len(l)
 
         start_stats['annot_counts'] = {}
-        for k, l in start_stats['called_starts'].items():
-            annotated = [g for g in l if not self.genes[g].draftStatus]
-            if len(annotated) > 0:
-                start_stats['annot_counts'][k] = len(annotated)
+        not_drafts = [pg for pg in self.genes.values() if not pg.draftStatus]
+        for gene in not_drafts:
+            start_number = [key for key,val in start_stats['called_starts'].items() if gene.full_name in val]
+            start_number = start_number[0]
+            if start_number not in start_stats['annot_counts'].keys():
+                start_stats['annot_counts'][start_number] = 0
+            start_stats['annot_counts'][start_number] += 1
+             #   start_stats['annot_counts'][k] = len(annotated)
 
         genes_without_most_called = []
-        print "phams.find_most_common_start: genes_start_most_called " + str(genes_start_most_called)
+        # print "phams.find_most_common_start: genes_start_most_called " + str(genes_start_most_called)
         for gene in self.genes.values():
             # check if the gene even has the most called start
-            if gene.gene_id in start_stats["possible"][most_called_start_index]:
-                if gene.gene_id in genes_start_most_called:
+            if gene.full_name in start_stats["possible"][most_called_start_index]:
+                if gene.full_name in genes_start_most_called:
                     if gene.orientation == 'F':   # only +1 for forward genes
                         # genes where most called start is present and it is called as the start are "most_called"
                         gene.suggested_start["most_called"] = (most_called_start_index, gene.start+1)
                     else:
                         gene.suggested_start["most_called"] = (most_called_start_index, gene.start)
-                    start_stats["most_called"].append(gene.gene_id)
+                    start_stats["most_called"].append(gene.full_name)
                 else:
                     # genes where most called start is present but it's not the called start are "most_not_called
-                    start_stats["most_not_called"].append(gene.gene_id)
+                    start_stats["most_not_called"].append(gene.full_name)
                     most_called_alignment_index = self.total_possible_starts[most_called_start_index-1]
                     suggested_start = gene.alignment_index_to_coord(most_called_alignment_index)
                     gene.suggested_start["most_called"] = (most_called_start_index, suggested_start)
 
             else:
                 # genes where the most called start is NOT even present are no_most_called
-                start_stats["no_most_called"].append(gene.gene_id)
+                start_stats["no_most_called"].append(gene.full_name)
                 possible_starts_coords = []
                 for start in gene.alignment_candidate_starts:
                     index = self.total_possible_starts.index(start) + 1
@@ -348,18 +507,18 @@ class Pham(object):
                 gene.suggested_start["most_called"] = possible_starts_coords
 
             if most_annot_start_index is not None:
-                if gene.gene_id in start_stats["possible"][most_annot_start_index]:
-                    if gene.gene_id in genes_start_most_annot:
+                if gene.full_name in start_stats["possible"][most_annot_start_index]:
+                    if gene.full_name in genes_start_most_annot:
                         # code below used for deprecated "suggested starts" list
                         # if gene.orientation == 'F':  # only +1 for forward genes
                         #     # genes where most annotated start is present and it is called as the start are "most_annotated"
                         #     gene.suggested_start["most_annotated"] = (most_annot_start_index, gene.start + 1)
                         # else:
                         #     gene.suggested_start["most_annotated"] = (most_annot_start_index, gene.start)
-                        start_stats["most_annotated"].append(gene.gene_id)
+                        start_stats["most_annotated"].append(gene.full_name)
                     else:
                         # genes where most annotated start is present but it's not the called start are "most_not_annotated"
-                        start_stats["most_not_annotated"].append(gene.gene_id)
+                        start_stats["most_not_annotated"].append(gene.full_name)
                         # code below used for deprecated "suggested starts" list
                         most_annot_alignment_index = self.total_possible_starts[most_annot_start_index - 1]
                         suggested_start = gene.alignment_index_to_coord(
@@ -368,7 +527,7 @@ class Pham(object):
 
                 else:
                     # genes where the most annotated start is NOT even present are no_most_annot
-                    start_stats["no_most_annot"].append(gene.gene_id)
+                    start_stats["no_most_annot"].append(gene.full_name)
                     # Code below used for deprecated "suggested starts" list
                     # possible_starts_coords = []
                     # for start in gene.alignment_candidate_starts:
@@ -434,7 +593,7 @@ class Pham(object):
             gene_dict['AvailableCoord'] = [gene.alignment_index_to_coord(s) for s in gene.alignment_candidate_starts]
             if gene.locustag is None:
                 gene.get_locustag()
-            if gene.locustag is not "":
+            if gene.locustag != "":
                 gene_dict['locustag'] = gene.locustag
             if gene.annot_author == 1 and gene.status == 'final': # Pitt "owns" it and is in genbank already
                 gene_dict['Editable'] = "True"
@@ -443,8 +602,8 @@ class Pham(object):
 
         summary_dict['Genes'] = genelist
         annotlist = {}
-        annotlist['Starts'] = self.stats['most_common']['annot_counts'].keys()
-        annotlist['Counts'] = self.stats['most_common']['annot_counts'].values()
+        annotlist['Starts'] = list(self.stats['most_common']['annot_counts'].keys())
+        annotlist['Counts'] = list(self.stats['most_common']['annot_counts'].values())
         summary_dict['Annots'] = annotlist
 
         conservationdict = {}
@@ -463,11 +622,11 @@ class Pham(object):
         clusters_present = set()
         genes_by_cluster = {}
         for g, pg in self.genes.items():
-            clusters_present.add(pg.cluster)
-            if pg.cluster in genes_by_cluster.keys():
-                genes_by_cluster[pg.cluster].append(g)
+            clusters_present.add(pg.subcluster)
+            if pg.subcluster in genes_by_cluster.keys():
+                genes_by_cluster[pg.subcluster].append(g)
             else:
-                genes_by_cluster[pg.cluster] = [g]
+                genes_by_cluster[pg.subcluster] = [g]
 
         self_stats['clusters_present'] = [str(t) for t in clusters_present]
         self_stats['genes_by_cluster'] = genes_by_cluster
