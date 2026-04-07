@@ -1,6 +1,6 @@
 import os
 import requests
-from typing import Any
+from typing import Any, Dict
 
 #test import
 
@@ -60,11 +60,39 @@ def fetch_genes_by_pham(
     base_url: str = "https://phamerator.org",
 ) -> Any:
     """
-    Fetch data for one pham.
+    Fetch data for one pham:
 
-    IMPORTANT:
-    You still need to confirm the exact endpoint for pham-based fetching.
-    Right now this is only a placeholder URL pattern.
+    first fetch gene # for all the genes in the phams
+
+    Then in call the jsons for each of those specific genes in the pham
+
+
     """
     url = f"{base_url.rstrip('/')}/api/{dataset}/phamily/{pham_no}"
     return _get_json(url)
+
+
+
+
+def all_gaps_by_phageID(phageID: str) -> Dict[str, int]:
+# add function that returns only the gap score from a full phage data
+# input is phageID
+# returns dictionary, each key is geneID and the value is the gap score
+
+# call fetch_genes_by_phage and then parse the json file
+
+# ***ignore for now
+
+    return None
+
+
+def all_gaps_by_pham(phamID: str) -> Dict[str, int]:
+
+# returns all gap scores for a pham
+# input is phamID
+# returns dictionary with key is GeneID and value is gap score
+
+    pham_gaps = {}
+    pham_genes = fetch_genes_by_pham(phamID)
+    return pham_gaps
+
