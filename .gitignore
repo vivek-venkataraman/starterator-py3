@@ -3,4 +3,5 @@ CLAUDE.md
 starterator/*.pyc
 .idea/
 .venv
-Protein
+Proteins/
+__pycache__/
