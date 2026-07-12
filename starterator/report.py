@@ -31,7 +31,7 @@ from collections import Counter
 
 import json
 import os
-from .phamerator_api import fetch_genes_by_pham
+from .phamerator_api import fetch_genes_by_pham, fetch_genes_by_phage
 
 class Report(object):
     def __init__(self, name=None):
@@ -70,19 +70,24 @@ class PhageReport(Report):
         # ---- Phamerator gap scores (save to JSON for the PDF subprocess)
         try:
             dataset = "Actino_Draft"
-            if dataset:
-                print("[starterator] pulling Phamerator gaps for", self.name, "dataset", dataset, flush=True)
+            print("[starterator] pulling Phamerator gaps for", self.name, "dataset", dataset, flush=True)
 
-                genes_json = fetch_phamerator_genes(dataset=dataset, phage=self.name)
-                gap_map = gap_map_from_genes(genes_json)
+            genes_json = fetch_genes_by_phage(self.name, dataset=dataset)
+            gap_by_api_id = {g.get("geneID", "").lower(): g.get("gap") for g in genes_json}
 
-                out_path = os.path.join(self.output_dir, f"{self.name.lower()}_phamerator_gaps.json")
-                with open(out_path, "w") as f:
-                    json.dump(gap_map, f)
+            gap_map = {}
+            for gene_list in self._phams.values():
+                for gene in gene_list:
+                    gene_num = gene.full_name.split("_")[-1]
+                    api_gene_id = f"{self.name}_CDS_{gene_num}".lower()
+                    if api_gene_id in gap_by_api_id:
+                        gap_map[gene.full_name] = gap_by_api_id[api_gene_id]
 
-                print("[starterator] wrote", out_path, "entries:", len(gap_map), flush=True)
-            else:
-                print("[starterator] PHAMERATOR_DATASET not set; skipping Phamerator gaps", flush=True)
+            out_path = os.path.join(self.output_dir, f"{self.name.lower()}_phamerator_gaps.json")
+            with open(out_path, "w") as f:
+                json.dump(gap_map, f)
+
+            print("[starterator] wrote", out_path, "entries:", len(gap_map), flush=True)
         except Exception as e:
             print("[starterator] WARNING: Phamerator gaps failed:", e, flush=True)
 
