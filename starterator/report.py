@@ -31,7 +31,7 @@ from collections import Counter
 
 import json
 import os
-# from .phamerator_api import fetch_phamerator_genes
+from .phamerator_api import fetch_genes_by_pham
 
 class Report(object):
     def __init__(self, name=None):
@@ -522,6 +522,17 @@ class PhamReport(Report):
 
     def make_report(self, save_json=False):
         self.pham = phams.Pham(self.pham_no)
+
+        try:
+            print("[starterator] pulling Phamerator gaps for pham", self.pham_no, flush=True)
+            gap_map = fetch_genes_by_pham(self.pham_no)
+            out_path = os.path.join(self.output_dir, f"pham_{self.pham_no}_phamerator_gaps.json")
+            with open(out_path, "w") as f:
+                json.dump(gap_map, f)
+            print("[starterator] wrote", out_path, "entries:", len(gap_map), flush=True)
+        except Exception as e:
+            print("[starterator] WARNING: Phamerator gaps failed:", e, flush=True)
+
         self.pham.align()
         self.pham.find_most_common_start()
         pickle_file = os.path.join(self.output_dir, "%s.pickle" % self.pham.pham_no)  # TODO:Figure out base name things

@@ -48,6 +48,18 @@ def load_gap_map(output_dir, phage_name):
         return {}
 
 
+def load_pham_gap_map(output_dir, pham_no):
+    path = os.path.join(output_dir, f"pham_{pham_no}_phamerator_gaps.json")
+    if not os.path.exists(path):
+        return {}
+
+    try:
+        with open(path, "r") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
 
 def parse_arguments():
     parser = argparse.ArgumentParser()
@@ -692,6 +704,9 @@ def make_pham_text(args, pham, pham_no, output_dir, only_pham=False):
         gap_map = load_gap_map(output_dir, args.phage)
         print("[making_files] gap map entries:", len(gap_map), flush=True)
         gap_map_lower = {k.lower(): v for k, v in gap_map.items()}
+    elif only_pham:
+        gap_map = load_pham_gap_map(output_dir, pham_no)
+        print("[making_files] pham gap map entries:", len(gap_map), flush=True)
 
     # increase leading a bit
     styles["Normal"].leading = 14
@@ -797,15 +812,8 @@ def make_pham_text(args, pham, pham_no, output_dir, only_pham=False):
                 else:
                     candidate_starts += '(' + str(start_num) + ', ' + str(gene.alignment_index_to_coord(start)) + '), '
 
-            for gene in gene_list:
-                ...
-
-
-            for gene in genes_in_phage:
-                gene_num = gene.full_name.split("_")[-1]  # "Badulia_28" -> "28"
-                key = f"{args.phage}_CDS_{gene_num}".lower()  # -> "badulia_cds_28"
-                gap = gap_map_lower.get(key)
-                gap_text = "N/A" if gap is None else str(gap)
+            gap = gap_map.get(gene.full_name)
+            gap_text = "N/A" if gap is None else str(gap)
 
             story.append(Paragraph(
                 " Gene: %s <br/> Start: %s, Stop: %s, Start Num: %s, Gap Score: %s " %
