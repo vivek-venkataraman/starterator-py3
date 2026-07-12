@@ -185,6 +185,7 @@ def get_version():
     results = db.query("SELECT Version from version;")
     return int(results[0][0])
 
+#maybe add a gap property to the Phams class
 
 class Pham(object):
     def __init__(self, pham_no, genes=None):

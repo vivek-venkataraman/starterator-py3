@@ -1,13 +1,24 @@
-from starterator.phamerator_api import fetch_genes_by_phage
 
-genes = fetch_genes_by_phage("Badulia")
 
-print("number of genes:", len(genes))
-print("type:", type(genes))
+from starterator.phamerator_api import fetch_genes_by_pham
 
-if genes:
-    first = genes[0]
-    print("first gene keys:", list(first.keys()))
-    print("first gene geneID:", first.get("geneID"))
-    print("first gene name:", first.get("name"))
-    print("first gene gap:", first.get("gap"))
+print("if you see this i am running")
+
+gaps = fetch_genes_by_pham("1616")
+
+print("number of genes found:", len(gaps))
+print()
+
+for gene_name in sorted(gaps):
+    print(f"{gene_name}: {gaps[gene_name]}")
+
+
+"""
+from starterator.phams import Pham
+
+pham = Pham("9443")
+
+for gene in pham.genes.values():
+    print(gene.full_name)
+    
+    """

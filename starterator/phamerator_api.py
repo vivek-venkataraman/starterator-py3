@@ -1,8 +1,8 @@
 import os
 import requests
 from typing import Any, Dict
-
-#test import
+from collections import defaultdict
+from .database import DB, get_db
 
 def _auth() -> tuple[str, str]:
     username = os.environ.get("PHAMERATOR_USERNAME")
@@ -54,25 +54,6 @@ def fetch_genes_by_phage(
     return data
 
 
-def fetch_genes_by_pham(
-    pham_no: int | str,
-    dataset: str = "Actino_Draft",
-    base_url: str = "https://phamerator.org",
-) -> Any:
-    """
-    Fetch data for one pham:
-
-    first fetch gene # for all the genes in the phams
-
-    Then in call the jsons for each of those specific genes in the pham
-
-
-    """
-    url = f"{base_url.rstrip('/')}/api/{dataset}/phamily/{pham_no}"
-    return _get_json(url)
-
-
-
 
 def all_gaps_by_phageID(phageID: str) -> Dict[str, int]:
 # add function that returns only the gap score from a full phage data
@@ -86,14 +67,47 @@ def all_gaps_by_phageID(phageID: str) -> Dict[str, int]:
     return None
 
 
-def all_gaps_by_pham(phamID: str) -> Dict[str, int]:
+def _starterator_db():
+    """
+    Try to use Starterator's existing/shared DB connection first.
+    If that is not available, fall back to making a new DB() connection.
+    """
+    try:
+        return get_db()
+    except Exception:
+        return DB()
 
-# returns all gap scores for a pham
-# input is phamID
-# returns dictionary with key is GeneID and value is gap score
 
+def fetch_genes_by_pham(pham_no, dataset="Actino_Draft", base_url="https://phamerator.org"):
+    from .phams import Pham
+
+    pham = Pham(str(pham_no))
     pham_gaps = {}
-    pham_genes = fetch_genes_by_pham(phamID)
+
+    genes_by_phage = {}
+
+    for gene in pham.genes.values():
+        phage_name = gene.phage_name
+
+        if phage_name not in genes_by_phage:
+            genes_by_phage[phage_name] = {}
+
+        api_gene_id = gene.full_name.replace("-", "_")
+
+        genes_by_phage[phage_name][api_gene_id] = gene.full_name
+
+    for phage_name, wanted_genes in genes_by_phage.items():
+        genes_json = fetch_genes_by_phage(phage_name, dataset=dataset, base_url=base_url)
+
+        for gene_json in genes_json:
+            api_gene_id = gene_json.get("geneID", "").replace("-", "_")
+
+            if api_gene_id in wanted_genes:
+                gene_name = wanted_genes[api_gene_id]
+                pham_gaps[gene_name] = gene_json.get("gap")
+
     return pham_gaps
 
-test commmit
+
+
+# create oham object and then do get_gebnes, self.genes property

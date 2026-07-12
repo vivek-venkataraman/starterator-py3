@@ -31,7 +31,7 @@ from collections import Counter
 
 import json
 import os
-from .phamerator_api import fetch_phamerator_genes
+# from .phamerator_api import fetch_phamerator_genes
 
 class Report(object):
     def __init__(self, name=None):
